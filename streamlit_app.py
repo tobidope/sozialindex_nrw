@@ -164,7 +164,10 @@ with st.container(border=True):
         display_df,
         hide_index=True,
         column_config={
-            "Schulnummer": st.column_config.TextColumn("Schulnummer"),
+            "Schulnummer": st.column_config.NumberColumn(
+                "Schulnummer",
+                format="%d",
+            ),
             "Sozialindexstufe": st.column_config.NumberColumn(
                 "Sozialindexstufe",
                 format="%d",

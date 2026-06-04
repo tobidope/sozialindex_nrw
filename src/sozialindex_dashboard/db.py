@@ -37,7 +37,7 @@ def write_schulen(df: pd.DataFrame, db_path: Path = DB_PATH) -> None:
                 bezirksregierung::TEXT AS bezirksregierung,
                 kreis_kreisfreie_stadt::TEXT AS kreis_kreisfreie_stadt,
                 schulform::TEXT AS schulform,
-                schulnummer::TEXT AS schulnummer,
+                schulnummer::INTEGER AS schulnummer,
                 schulname::TEXT AS schulname,
                 sozialindexstufe::INTEGER AS sozialindexstufe
             FROM schulen_df

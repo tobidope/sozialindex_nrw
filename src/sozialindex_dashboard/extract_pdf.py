@@ -60,7 +60,7 @@ def _extract_line_rows(page) -> list[dict[str, str | int]]:
             "schulform": _join_words(
                 word for word in line_words if 215 <= float(word["x0"]) < 290
             ),
-            "schulnummer": number_word["text"].strip(),
+            "schulnummer": int(number_word["text"]),
             "schulname": _join_words(
                 word for word in line_words if 330 <= float(word["x0"]) < 470
             ),
@@ -93,7 +93,7 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
     if df.empty:
         raise RuntimeError(f"No school rows could be extracted from {pdf_path}")
 
-    df["schulnummer"] = df["schulnummer"].astype("string").str.strip()
+    df["schulnummer"] = pd.to_numeric(df["schulnummer"], errors="raise").astype("int64")
     df["schulname"] = df["schulname"].astype("string").str.replace(r"\s+", " ", regex=True).str.strip()
     df["sozialindexstufe"] = pd.to_numeric(df["sozialindexstufe"], errors="raise").astype("int64")
     df = df.dropna(subset=["schulnummer", "schulname", "sozialindexstufe"])
