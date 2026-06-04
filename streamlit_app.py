@@ -6,6 +6,7 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
+from sozialindex_dashboard.config import load_source_config
 from sozialindex_dashboard.db import DB_PATH, read_schulen
 from sozialindex_dashboard.geo import add_distance_km, parse_coordinate, socialindex_color
 from sozialindex_dashboard.geolocation import browser_geolocation
@@ -147,6 +148,7 @@ def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
     return list_df.sort_values("Sozialindex", ascending=True)
 
 
+source_config = load_source_config()
 df = load_data(DB_PATH.stat().st_mtime if DB_PATH.exists() else 0)
 
 st.title("Sozialindex Schulen NRW")
@@ -375,3 +377,18 @@ with st.container(border=True):
             ),
         },
     )
+
+st.markdown("---")
+st.subheader("Datenquellen & Lizenz")
+st.markdown(
+    f"""
+Die dargestellten Daten basieren auf Open Data des Ministeriums für Schule und Bildung
+des Landes Nordrhein-Westfalen.
+
+- Sozialindex-Schulliste 2025/26: [PDF]({source_config.socialindex_pdf_url})
+- Schulgrunddaten NRW: [CSV]({source_config.school_base_data_url})
+- Lizenz: [Datenlizenz Deutschland – Namensnennung – Version 2.0](https://www.govdata.de/dl-de/by-2-0)
+
+Diese Webseite ist kein offizielles Angebot des Ministeriums.
+"""
+)
