@@ -169,27 +169,6 @@ if df.empty:
     st.stop()
 
 with st.sidebar:
-    st.header("Filter")
-    query = st.text_input(
-        "Suche",
-        placeholder="Schulname, Schulnummer oder Kreis",
-    )
-    selected_bezirksregierungen = st.multiselect(
-        "Bezirksregierung",
-        sorted(df["bezirksregierung"].dropna().unique()),
-    )
-    selected_kreise = st.multiselect(
-        "Kreis / Kreisfreie Stadt",
-        sorted(df["kreis_kreisfreie_stadt"].dropna().unique()),
-    )
-    selected_schulformen = st.multiselect(
-        "Schulform",
-        sorted(df["schulform"].dropna().unique()),
-    )
-    selected_sozialindexstufen = st.multiselect(
-        "Sozialindexstufe",
-        sorted(df["sozialindexstufe"].dropna().unique()),
-    )
     st.header("Umkreis")
     radius_km = st.slider("Radius in km", min_value=1, max_value=50, value=5)
     location_result = browser_geolocation()
@@ -213,6 +192,28 @@ with st.sidebar:
         st.warning("Latitude muss zwischen 50.0 und 53.0 liegen.")
     if longitude_text and manual_longitude is None:
         st.warning("Longitude muss zwischen 5.0 und 10.0 liegen.")
+
+    st.header("Filter")
+    query = st.text_input(
+        "Suche",
+        placeholder="Schulname, Schulnummer oder Kreis",
+    )
+    selected_bezirksregierungen = st.multiselect(
+        "Bezirksregierung",
+        sorted(df["bezirksregierung"].dropna().unique()),
+    )
+    selected_kreise = st.multiselect(
+        "Kreis / Kreisfreie Stadt",
+        sorted(df["kreis_kreisfreie_stadt"].dropna().unique()),
+    )
+    selected_schulformen = st.multiselect(
+        "Schulform",
+        sorted(df["schulform"].dropna().unique()),
+    )
+    selected_sozialindexstufen = st.multiselect(
+        "Sozialindexstufe",
+        sorted(df["sozialindexstufe"].dropna().unique()),
+    )
 
 filtered_df = filter_data(
     df,
