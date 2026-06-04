@@ -8,7 +8,11 @@ import streamlit as st
 
 from sozialindex_dashboard.config import load_source_config
 from sozialindex_dashboard.db import DB_PATH, read_imported_at, read_schulen
-from sozialindex_dashboard.geo import add_distance_km, parse_coordinate, socialindex_color
+from sozialindex_dashboard.geo import (
+    add_distance_km,
+    parse_coordinate,
+    socialindex_color,
+)
 from sozialindex_dashboard.geolocation import browser_geolocation
 
 st.set_page_config(
@@ -104,7 +108,7 @@ def render_socialindex_legend() -> None:
         </style>
         <div class="map-legend">
             <span class="legend-title">Sozialindexstufe</span>
-            {''.join(items)}
+            {"".join(items)}
         </div>
         """
     )
@@ -149,7 +153,9 @@ def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
     )
     if include_distance and "entfernung_km" in df.columns:
         list_df["Entfernung"] = df["entfernung_km"]
-        return list_df.sort_values(["Sozialindex", "Entfernung"], ascending=[True, True])
+        return list_df.sort_values(
+            ["Sozialindex", "Entfernung"], ascending=[True, True]
+        )
     return list_df.sort_values("Sozialindex", ascending=True)
 
 
@@ -170,21 +176,37 @@ if df.empty:
 
 with st.sidebar:
     st.header("Umkreis")
-    radius_km = st.slider("Radius in km", min_value=1, max_value=50, value=5)
-    location_result = browser_geolocation()
+    radius_km = st.slider(
+        "Radius in km",
+        min_value=1,
+        max_value=50,
+        value=5,
+        key="radius_km",
+        bind="query-params",
+    )
+    location_result = browser_geolocation(key="browser_geolocation")
     browser_latitude = getattr(location_result, "latitude", None)
     browser_longitude = getattr(location_result, "longitude", None)
-    default_latitude = float(browser_latitude) if browser_latitude is not None else None
-    default_longitude = float(browser_longitude) if browser_longitude is not None else None
+    if browser_latitude is not None:
+        st.session_state["latitude"] = f"{float(browser_latitude):.6f}"
+    else:
+        st.session_state.setdefault("latitude", "")
+    if browser_longitude is not None:
+        st.session_state["longitude"] = f"{float(browser_longitude):.6f}"
+    else:
+        st.session_state.setdefault("longitude", "")
+
     latitude_text = st.text_input(
         "Latitude",
-        value=f"{default_latitude:.6f}" if default_latitude is not None else "",
         placeholder="z.B. 51.4818",
+        key="latitude",
+        bind="query-params",
     )
     longitude_text = st.text_input(
         "Longitude",
-        value=f"{default_longitude:.6f}" if default_longitude is not None else "",
         placeholder="z.B. 7.2162",
+        key="longitude",
+        bind="query-params",
     )
     manual_latitude = parse_coordinate(latitude_text, 50.0, 53.0)
     manual_longitude = parse_coordinate(longitude_text, 5.0, 10.0)
@@ -197,22 +219,32 @@ with st.sidebar:
     query = st.text_input(
         "Suche",
         placeholder="Schulname, Schulnummer oder Kreis",
+        key="suche",
+        bind="query-params",
     )
     selected_bezirksregierungen = st.multiselect(
         "Bezirksregierung",
         sorted(df["bezirksregierung"].dropna().unique()),
+        key="bezirksregierungen",
+        bind="query-params",
     )
     selected_kreise = st.multiselect(
         "Kreis / Kreisfreie Stadt",
         sorted(df["kreis_kreisfreie_stadt"].dropna().unique()),
+        key="kreis_stadt",
+        bind="query-params",
     )
     selected_schulformen = st.multiselect(
         "Schulform",
         sorted(df["schulform"].dropna().unique()),
+        key="schulformen",
+        bind="query-params",
     )
     selected_sozialindexstufen = st.multiselect(
         "Sozialindexstufe",
         sorted(df["sozialindexstufe"].dropna().unique()),
+        key="sozialindexstufen",
+        bind="query-params",
     )
 
 filtered_df = filter_data(
@@ -271,7 +303,9 @@ with st.container(border=True):
         map_df = schools_in_radius.copy()
         map_df["radius_m"] = 100
         map_df["farbe"] = map_df["sozialindexstufe"].apply(socialindex_color)
-        map_df["entfernung_karte"] = map_df["entfernung_km"].map(lambda value: f"{value:.1f}")
+        map_df["entfernung_karte"] = map_df["entfernung_km"].map(
+            lambda value: f"{value:.1f}"
+        )
         view_state = pdk.ViewState(
             latitude=float(manual_latitude),
             longitude=float(manual_longitude),
@@ -374,6 +408,7 @@ with st.container(border=True):
             "Sozialindex": st.column_config.NumberColumn(
                 "Sozialindex",
                 format="%d",
+                help="Sozialindexstufe von 1 (niedrig) bis 9 (hoch)",
             ),
             "Link": st.column_config.LinkColumn(
                 "Link",
@@ -381,12 +416,12 @@ with st.container(border=True):
             ),
             "Entfernung": st.column_config.NumberColumn(
                 "Entfernung",
-                format="%.2f",
+                format="%.2f km",
             ),
         },
     )
 
-st.markdown("---")
+st.divider()
 st.subheader("Datenquellen & Lizenz")
 st.markdown(
     f"""
