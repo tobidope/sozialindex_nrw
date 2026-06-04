@@ -18,6 +18,12 @@ COLUMNS = [
     "schulnummer",
     "schulname",
     "sozialindexstufe",
+    "strasse",
+    "plz",
+    "ort",
+    "latitude",
+    "longitude",
+    "geo_match_status",
 ]
 
 
@@ -39,7 +45,13 @@ def write_schulen(df: pd.DataFrame, db_path: Path = DB_PATH) -> None:
                 schulform::TEXT AS schulform,
                 schulnummer::INTEGER AS schulnummer,
                 schulname::TEXT AS schulname,
-                sozialindexstufe::INTEGER AS sozialindexstufe
+                sozialindexstufe::INTEGER AS sozialindexstufe,
+                strasse::TEXT AS strasse,
+                plz::TEXT AS plz,
+                ort::TEXT AS ort,
+                latitude::DOUBLE AS latitude,
+                longitude::DOUBLE AS longitude,
+                geo_match_status::TEXT AS geo_match_status
             FROM schulen_df
             """
         )
@@ -58,7 +70,13 @@ def read_schulen(db_path: Path = DB_PATH) -> pd.DataFrame:
                 schulform,
                 schulnummer,
                 schulname,
-                sozialindexstufe
+                sozialindexstufe,
+                strasse,
+                plz,
+                ort,
+                latitude,
+                longitude,
+                geo_match_status
             FROM {TABLE_NAME}
             ORDER BY
                 bezirksregierung,

@@ -7,11 +7,22 @@ from typing import Iterable
 
 import pandas as pd
 import pdfplumber
+from pyproj import Transformer
 
 from sozialindex_dashboard.db import COLUMNS, DB_PATH, PDF_PATH, write_schulen
 
+SCHULDATEN_URL = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"
+SOCIALINDEX_COLUMNS = [
+    "bezirksregierung",
+    "kreis_kreisfreie_stadt",
+    "schulform",
+    "schulnummer",
+    "schulname",
+    "sozialindexstufe",
+]
 SCHOOL_NUMBER_RE = re.compile(r"^\d{6}$")
 INDEX_RE = re.compile(r"^\d+$")
+UTM32_TO_WGS84 = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
 
 
 def _join_words(words: Iterable[dict]) -> str:
@@ -89,7 +100,7 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
                     row[column] = current[column]
                 records.append(row)
 
-    df = pd.DataFrame.from_records(records, columns=COLUMNS)
+    df = pd.DataFrame.from_records(records, columns=SOCIALINDEX_COLUMNS)
     if df.empty:
         raise RuntimeError(f"No school rows could be extracted from {pdf_path}")
 
@@ -110,13 +121,81 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
     return df
 
 
+def _read_school_base_data(url: str = SCHULDATEN_URL) -> pd.DataFrame:
+    raw_df = pd.read_csv(url, sep=";", encoding="utf-8", skiprows=1, dtype={"PLZ": "string"})
+    required_columns = {
+        "Schulnummer",
+        "PLZ",
+        "Ort",
+        "Strasse",
+        "EPSG",
+        "UTMRechtswert",
+        "UTMHochwert",
+    }
+    missing_columns = sorted(required_columns - set(raw_df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "The school base data CSV is missing required columns: "
+            + ", ".join(missing_columns)
+        )
+
+    df = raw_df[list(required_columns)].rename(
+        columns={
+            "Schulnummer": "schulnummer",
+            "PLZ": "plz",
+            "Ort": "ort",
+            "Strasse": "strasse",
+            "EPSG": "epsg",
+            "UTMRechtswert": "utm_rechtswert",
+            "UTMHochwert": "utm_hochwert",
+        }
+    )
+    df["schulnummer"] = pd.to_numeric(df["schulnummer"], errors="raise").astype("int64")
+    df["utm_rechtswert"] = pd.to_numeric(df["utm_rechtswert"], errors="coerce")
+    df["utm_hochwert"] = pd.to_numeric(df["utm_hochwert"], errors="coerce")
+    df["plz"] = df["plz"].astype("string").str.strip()
+    df["ort"] = df["ort"].astype("string").str.strip()
+    df["strasse"] = df["strasse"].astype("string").str.strip()
+
+    has_utm32 = (
+        df["epsg"].astype("string").str.upper().str.strip().eq("EPSG:25832")
+        & df["utm_rechtswert"].notna()
+        & df["utm_hochwert"].notna()
+    )
+    df["latitude"] = pd.NA
+    df["longitude"] = pd.NA
+    if has_utm32.any():
+        longitudes, latitudes = UTM32_TO_WGS84.transform(
+            df.loc[has_utm32, "utm_rechtswert"].to_numpy(),
+            df.loc[has_utm32, "utm_hochwert"].to_numpy(),
+        )
+        df.loc[has_utm32, "longitude"] = longitudes
+        df.loc[has_utm32, "latitude"] = latitudes
+
+    return df[["schulnummer", "strasse", "plz", "ort", "latitude", "longitude"]]
+
+
+def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str = SCHULDATEN_URL) -> pd.DataFrame:
+    base_df = _read_school_base_data(url)
+    enriched_df = socialindex_df.merge(base_df, on="schulnummer", how="left")
+    has_coordinates = enriched_df["latitude"].notna() & enriched_df["longitude"].notna()
+    enriched_df["geo_match_status"] = "missing_location"
+    enriched_df.loc[has_coordinates, "geo_match_status"] = "matched"
+    return enriched_df[COLUMNS]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract NRW Sozialindex school data into DuckDB.")
     parser.add_argument("--pdf", type=Path, default=PDF_PATH, help="Source PDF path")
     parser.add_argument("--db", type=Path, default=DB_PATH, help="Target DuckDB path")
+    parser.add_argument(
+        "--schuldaten-url",
+        default=SCHULDATEN_URL,
+        help="Official NRW school base data CSV URL",
+    )
     args = parser.parse_args()
 
-    df = extract_pdf(args.pdf)
+    df = enrich_with_geodata(extract_pdf(args.pdf), args.schuldaten_url)
     write_schulen(df, args.db)
     print(f"Wrote {len(df):,} schools to {args.db}")
 
