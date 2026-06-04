@@ -7,7 +7,7 @@ import pydeck as pdk
 import streamlit as st
 
 from sozialindex_dashboard.config import load_source_config
-from sozialindex_dashboard.db import DB_PATH, read_schulen
+from sozialindex_dashboard.db import DB_PATH, read_imported_at, read_schulen
 from sozialindex_dashboard.geo import add_distance_km, parse_coordinate, socialindex_color
 from sozialindex_dashboard.geolocation import browser_geolocation
 
@@ -21,6 +21,11 @@ st.set_page_config(
 @st.cache_data(show_spinner=False)
 def load_data(db_mtime: float) -> pd.DataFrame:
     return read_schulen(DB_PATH)
+
+
+@st.cache_data(show_spinner=False)
+def load_imported_at(db_mtime: float):
+    return read_imported_at(DB_PATH)
 
 
 def filter_data(
@@ -149,7 +154,9 @@ def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
 
 
 source_config = load_source_config()
-df = load_data(DB_PATH.stat().st_mtime if DB_PATH.exists() else 0)
+db_mtime = DB_PATH.stat().st_mtime if DB_PATH.exists() else 0
+df = load_data(db_mtime)
+imported_at = load_imported_at(db_mtime)
 
 st.title("Sozialindex Schulen NRW")
 st.caption("Schuljahr 2025/2026")
@@ -387,6 +394,7 @@ des Landes Nordrhein-Westfalen.
 
 - Sozialindex-Schulliste 2025/26: [PDF]({source_config.socialindex_pdf_url})
 - Schulgrunddaten NRW: [CSV]({source_config.school_base_data_url})
+- Datenstand: {imported_at.astimezone().strftime("%d.%m.%Y, %H:%M Uhr") if imported_at else "unbekannt"}
 - Lizenz: [Datenlizenz Deutschland – Namensnennung – Version 2.0](https://www.govdata.de/dl-de/by-2-0)
 
 Diese Webseite ist kein offizielles Angebot des Ministeriums.

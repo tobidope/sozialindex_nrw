@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import re
 from pathlib import Path
 from typing import Iterable
@@ -210,7 +211,7 @@ def main() -> None:
 
     pdf_path = args.pdf if args.pdf is not None else download_pdf(args.pdf_url)
     df = enrich_with_geodata(extract_pdf(pdf_path), args.school_base_data_url)
-    write_schulen(df, args.db)
+    write_schulen(df, args.db, imported_at=datetime.now(timezone.utc))
     print(f"Wrote {len(df):,} schools to {args.db}")
 
 
