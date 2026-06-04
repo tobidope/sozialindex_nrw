@@ -15,11 +15,14 @@ from sozialindex_dashboard.geo import (
 )
 from sozialindex_dashboard.geolocation import browser_geolocation
 
+NRW_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/8/83/Wappenzeichen_NRW.svg"
+
 st.set_page_config(
     page_title="Sozialindex Schulen NRW",
-    page_icon=":material/school:",
+    page_icon=NRW_LOGO_URL,
     layout="wide",
 )
+st.logo(NRW_LOGO_URL, size="medium", icon_image=NRW_LOGO_URL)
 
 
 @st.cache_data(show_spinner=False)
@@ -47,8 +50,6 @@ def filter_data(
             filtered["schulname"].astype(str)
             + " "
             + filtered["schulnummer"].astype(str)
-            + " "
-            + filtered["kreis_kreisfreie_stadt"].astype(str)
         ).str.lower()
         filtered = filtered[search_space.str.contains(query.lower(), regex=False)]
 
@@ -218,31 +219,35 @@ with st.sidebar:
     st.header("Filter")
     query = st.text_input(
         "Suche",
-        placeholder="Schulname, Schulnummer oder Kreis",
+        placeholder="Schulname oder Schulnummer",
         key="suche",
         bind="query-params",
     )
     selected_bezirksregierungen = st.multiselect(
         "Bezirksregierung",
         sorted(df["bezirksregierung"].dropna().unique()),
+        placeholder="Bezirksregierung auswählen",
         key="bezirksregierungen",
         bind="query-params",
     )
     selected_kreise = st.multiselect(
         "Kreis / Kreisfreie Stadt",
         sorted(df["kreis_kreisfreie_stadt"].dropna().unique()),
+        placeholder="Kreis oder Stadt auswählen",
         key="kreis_stadt",
         bind="query-params",
     )
     selected_schulformen = st.multiselect(
         "Schulform",
         sorted(df["schulform"].dropna().unique()),
+        placeholder="Schulform auswählen",
         key="schulformen",
         bind="query-params",
     )
     selected_sozialindexstufen = st.multiselect(
         "Sozialindexstufe",
         sorted(df["sozialindexstufe"].dropna().unique()),
+        placeholder="Sozialindexstufe auswählen",
         key="sozialindexstufen",
         bind="query-params",
     )
@@ -269,19 +274,22 @@ if origin_available and not schools_with_coordinates.empty:
         schools_with_distance["entfernung_km"] <= radius_km
     ].sort_values("entfernung_km")
 
+result_df = schools_in_radius if origin_available else filtered_df
+result_with_coordinates = result_df.dropna(subset=["latitude", "longitude"]).copy()
+
 with st.container(horizontal=True):
-    st.metric("Schulen", f"{len(filtered_df):,}".replace(",", "."), border=True)
+    st.metric("Schulen", f"{len(result_df):,}".replace(",", "."), border=True)
     st.metric(
         "Kreise / kreisfreie Städte",
-        f"{filtered_df['kreis_kreisfreie_stadt'].nunique():,}".replace(",", "."),
+        f"{result_df['kreis_kreisfreie_stadt'].nunique():,}".replace(",", "."),
         border=True,
     )
     st.metric(
         "Schulformen",
-        f"{filtered_df['schulform'].nunique():,}".replace(",", "."),
+        f"{result_df['schulform'].nunique():,}".replace(",", "."),
         border=True,
     )
-    average_index = filtered_df["sozialindexstufe"].mean()
+    average_index = result_df["sozialindexstufe"].mean()
     st.metric(
         "Durchschnittliche Stufe",
         f"{average_index:.1f}" if pd.notna(average_index) else "-",
@@ -289,7 +297,7 @@ with st.container(horizontal=True):
     )
     st.metric(
         "Mit Koordinaten",
-        f"{schools_with_coordinates['schulnummer'].nunique():,}".replace(",", "."),
+        f"{result_with_coordinates['schulnummer'].nunique():,}".replace(",", "."),
         border=True,
     )
 
@@ -363,7 +371,7 @@ with chart_col:
     with st.container(border=True):
         st.subheader("Verteilung nach Sozialindexstufe")
         index_counts = (
-            filtered_df.groupby("sozialindexstufe", as_index=False)
+            result_df.groupby("sozialindexstufe", as_index=False)
             .size()
             .rename(columns={"size": "Anzahl Schulen"})
             .sort_values("sozialindexstufe")
@@ -380,7 +388,7 @@ with form_col:
     with st.container(border=True):
         st.subheader("Schulen nach Schulform")
         form_counts = (
-            filtered_df.groupby("schulform", as_index=False)
+            result_df.groupby("schulform", as_index=False)
             .size()
             .rename(columns={"size": "Anzahl Schulen"})
             .sort_values("Anzahl Schulen", ascending=False)
@@ -395,10 +403,7 @@ with form_col:
 
 with st.container(border=True):
     st.subheader("Schulliste")
-    if origin_available and not schools_in_radius.empty:
-        display_df = build_school_list(schools_in_radius, include_distance=True)
-    else:
-        display_df = build_school_list(filtered_df, include_distance=False)
+    display_df = build_school_list(result_df, include_distance=origin_available)
 
     st.dataframe(
         display_df,
