@@ -194,11 +194,9 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
         if column not in {"schulnummer", "utm_rechtswert", "utm_hochwert"}:
             df[column] = df[column].astype("string").str.strip()
 
-    has_utm32 = (
-        df["epsg"].astype("string").str.upper().str.strip().eq("EPSG:25832")
-        & df["utm_rechtswert"].notna()
-        & df["utm_hochwert"].notna()
-    )
+    epsg = df["epsg"].astype("string").str.upper().str.strip()
+    has_utm_values = df["utm_rechtswert"].notna() & df["utm_hochwert"].notna()
+    has_utm32 = (epsg.eq("EPSG:25832") | epsg.isna() | epsg.eq("")) & has_utm_values
     df["latitude"] = pd.NA
     df["longitude"] = pd.NA
     if has_utm32.any():

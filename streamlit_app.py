@@ -47,7 +47,9 @@ def filter_data(
 
     if query:
         search_space = (
-            filtered["schulname"].astype(str)
+            filtered["kurzbezeichnung"].astype(str)
+            + " "
+            + filtered["schulname"].astype(str)
             + " "
             + filtered["schulnummer"].astype(str)
         ).str.lower()
@@ -130,11 +132,18 @@ def format_address(row: pd.Series) -> str:
     return ", ".join(part for part in parts if part)
 
 
+def school_display_name(row: pd.Series) -> str:
+    short_name = str(row.get("kurzbezeichnung") or "").strip()
+    if short_name and short_name != "<NA>":
+        return short_name
+    return str(row.get("schulname") or "").strip()
+
+
 def google_maps_search_link(row: pd.Series) -> str:
     query = " ".join(
         part
         for part in [
-            str(row.get("schulname") or "").strip(),
+            school_display_name(row),
             format_address(row),
         ]
         if part
@@ -152,7 +161,7 @@ def school_homepage_link(row: pd.Series) -> str | None:
 
 
 def school_homepage_display_link(row: pd.Series) -> str:
-    school_name = str(row.get("schulname") or "").strip()
+    school_name = school_display_name(row)
     homepage = school_homepage_link(row)
     if homepage is None:
         return f"#schule={school_name}"
@@ -370,7 +379,7 @@ with st.container(border=True):
                 layers=[school_layer, origin_layer],
                 tooltip={
                     "html": (
-                        "<b>{schulname}</b><br/>"
+                        "<b>{kurzbezeichnung}</b><br/>"
                         "Schulnummer: {schulnummer}<br/>"
                         "{schulform}, {ort}<br/>"
                         "Sozialindexstufe: {sozialindexstufe}<br/>"
