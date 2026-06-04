@@ -4,14 +4,15 @@ import argparse
 import re
 from pathlib import Path
 from typing import Iterable
+from urllib.request import urlretrieve
 
 import pandas as pd
 import pdfplumber
 from pyproj import Transformer
 
+from sozialindex_dashboard.config import load_source_config
 from sozialindex_dashboard.db import COLUMNS, DB_PATH, PDF_PATH, write_schulen
 
-SCHULDATEN_URL = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"
 SOCIALINDEX_COLUMNS = [
     "bezirksregierung",
     "kreis_kreisfreie_stadt",
@@ -23,6 +24,12 @@ SOCIALINDEX_COLUMNS = [
 SCHOOL_NUMBER_RE = re.compile(r"^\d{6}$")
 INDEX_RE = re.compile(r"^\d+$")
 UTM32_TO_WGS84 = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
+
+
+def download_pdf(url: str, target_path: Path = PDF_PATH) -> Path:
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    urlretrieve(url, target_path)
+    return target_path
 
 
 def _join_words(words: Iterable[dict]) -> str:
@@ -121,7 +128,7 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
     return df
 
 
-def _read_school_base_data(url: str = SCHULDATEN_URL) -> pd.DataFrame:
+def _read_school_base_data(url: str) -> pd.DataFrame:
     raw_df = pd.read_csv(url, sep=";", encoding="utf-8", skiprows=1, dtype={"PLZ": "string"})
     required_columns = {
         "Schulnummer",
@@ -175,7 +182,7 @@ def _read_school_base_data(url: str = SCHULDATEN_URL) -> pd.DataFrame:
     return df[["schulnummer", "strasse", "plz", "ort", "latitude", "longitude"]]
 
 
-def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str = SCHULDATEN_URL) -> pd.DataFrame:
+def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:
     base_df = _read_school_base_data(url)
     enriched_df = socialindex_df.merge(base_df, on="schulnummer", how="left")
     has_coordinates = enriched_df["latitude"].notna() & enriched_df["longitude"].notna()
@@ -185,17 +192,24 @@ def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str = SCHULDATEN_URL)
 
 
 def main() -> None:
+    source_config = load_source_config()
     parser = argparse.ArgumentParser(description="Extract NRW Sozialindex school data into DuckDB.")
-    parser.add_argument("--pdf", type=Path, default=PDF_PATH, help="Source PDF path")
+    parser.add_argument("--pdf", type=Path, help="Source PDF path. If omitted, the configured PDF URL is downloaded.")
     parser.add_argument("--db", type=Path, default=DB_PATH, help="Target DuckDB path")
     parser.add_argument(
-        "--schuldaten-url",
-        default=SCHULDATEN_URL,
+        "--pdf-url",
+        default=source_config.socialindex_pdf_url,
+        help="Socialindex school list PDF URL",
+    )
+    parser.add_argument(
+        "--school-base-data-url",
+        default=source_config.school_base_data_url,
         help="Official NRW school base data CSV URL",
     )
     args = parser.parse_args()
 
-    df = enrich_with_geodata(extract_pdf(args.pdf), args.schuldaten_url)
+    pdf_path = args.pdf if args.pdf is not None else download_pdf(args.pdf_url)
+    df = enrich_with_geodata(extract_pdf(pdf_path), args.school_base_data_url)
     write_schulen(df, args.db)
     print(f"Wrote {len(df):,} schools to {args.db}")
 

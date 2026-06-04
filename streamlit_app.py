@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote_plus
+
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
@@ -50,6 +52,99 @@ def filter_data(
         filtered = filtered[filtered["sozialindexstufe"].isin(sozialindexstufen)]
 
     return filtered
+
+
+def render_socialindex_legend() -> None:
+    items = []
+    for index in range(1, 10):
+        red, green, blue, _alpha = socialindex_color(index)
+        items.append(
+            f"""
+            <div class="legend-item">
+                <span class="legend-swatch" style="background: rgb({red}, {green}, {blue});"></span>
+                <span>{index}</span>
+            </div>
+            """
+        )
+
+    st.html(
+        f"""
+        <style>
+        .map-legend {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+            color: #17211F;
+            font-size: 0.875rem;
+        }}
+        .legend-title {{
+            font-weight: 600;
+            margin-right: 2px;
+        }}
+        .legend-item {{
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }}
+        .legend-swatch {{
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1px solid rgba(23, 33, 31, 0.25);
+        }}
+        </style>
+        <div class="map-legend">
+            <span class="legend-title">Sozialindexstufe</span>
+            {''.join(items)}
+        </div>
+        """
+    )
+
+
+def format_address(row: pd.Series) -> str:
+    parts = [
+        str(row.get("strasse") or "").strip(),
+        " ".join(
+            part
+            for part in [
+                str(row.get("plz") or "").strip(),
+                str(row.get("ort") or "").strip(),
+            ]
+            if part
+        ),
+    ]
+    return ", ".join(part for part in parts if part)
+
+
+def google_maps_search_link(row: pd.Series) -> str:
+    query = " ".join(
+        part
+        for part in [
+            str(row.get("schulname") or "").strip(),
+            format_address(row),
+        ]
+        if part
+    )
+    return f"https://www.google.com/maps/search/?api=1&query={quote_plus(query)}"
+
+
+def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
+    list_df = pd.DataFrame(
+        {
+            "Schule": df["schulname"],
+            "Schulform": df["schulform"],
+            "Sozialindex": df["sozialindexstufe"],
+            "Adresse": df.apply(format_address, axis=1),
+            "Link": df.apply(google_maps_search_link, axis=1),
+        }
+    )
+    if include_distance and "entfernung_km" in df.columns:
+        list_df["Entfernung"] = df["entfernung_km"]
+        return list_df.sort_values(["Sozialindex", "Entfernung"], ascending=[True, True])
+    return list_df.sort_values("Sozialindex", ascending=True)
 
 
 df = load_data(DB_PATH.stat().st_mtime if DB_PATH.exists() else 0)
@@ -166,6 +261,7 @@ with st.container(border=True):
         map_df = schools_in_radius.copy()
         map_df["radius_m"] = 100
         map_df["farbe"] = map_df["sozialindexstufe"].apply(socialindex_color)
+        map_df["entfernung_karte"] = map_df["entfernung_km"].map(lambda value: f"{value:.1f}")
         view_state = pdk.ViewState(
             latitude=float(manual_latitude),
             longitude=float(manual_longitude),
@@ -209,12 +305,13 @@ with st.container(border=True):
                         "Schulnummer: {schulnummer}<br/>"
                         "{schulform}, {ort}<br/>"
                         "Sozialindexstufe: {sozialindexstufe}<br/>"
-                        "Entfernung: {entfernung_km} km"
+                        "Entfernung: {entfernung_karte} km"
                     ),
                     "style": {"backgroundColor": "#17211F", "color": "white"},
                 },
             )
         )
+        render_socialindex_legend()
 
 chart_col, form_col = st.columns(2)
 
@@ -254,58 +351,27 @@ with form_col:
 
 with st.container(border=True):
     st.subheader("Schulliste")
-    display_df = filtered_df.rename(
-        columns={
-            "bezirksregierung": "Bezirksregierung",
-            "kreis_kreisfreie_stadt": "Kreis / Kreisfreie Stadt",
-            "schulform": "Schulform",
-            "schulnummer": "Schulnummer",
-            "schulname": "Schulname",
-            "sozialindexstufe": "Sozialindexstufe",
-            "strasse": "Strasse",
-            "plz": "PLZ",
-            "ort": "Ort",
-            "latitude": "Latitude",
-            "longitude": "Longitude",
-            "geo_match_status": "Geo-Status",
-            "entfernung_km": "Entfernung km",
-        }
-    )
     if origin_available and not schools_in_radius.empty:
-        display_df = schools_in_radius.rename(
-            columns={
-                "bezirksregierung": "Bezirksregierung",
-                "kreis_kreisfreie_stadt": "Kreis / Kreisfreie Stadt",
-                "schulform": "Schulform",
-                "schulnummer": "Schulnummer",
-                "schulname": "Schulname",
-                "sozialindexstufe": "Sozialindexstufe",
-                "strasse": "Strasse",
-                "plz": "PLZ",
-                "ort": "Ort",
-                "latitude": "Latitude",
-                "longitude": "Longitude",
-                "geo_match_status": "Geo-Status",
-                "entfernung_km": "Entfernung km",
-            }
-        )
+        display_df = build_school_list(schools_in_radius, include_distance=True)
+    else:
+        display_df = build_school_list(filtered_df, include_distance=False)
+
     st.dataframe(
         display_df,
         hide_index=True,
+        column_order=list(display_df.columns),
         column_config={
-            "Schulnummer": st.column_config.NumberColumn(
-                "Schulnummer",
+            "Sozialindex": st.column_config.NumberColumn(
+                "Sozialindex",
                 format="%d",
             ),
-            "Sozialindexstufe": st.column_config.NumberColumn(
-                "Sozialindexstufe",
-                format="%d",
+            "Link": st.column_config.LinkColumn(
+                "Link",
+                display_text="Google Maps",
             ),
-            "Entfernung km": st.column_config.NumberColumn(
-                "Entfernung km",
+            "Entfernung": st.column_config.NumberColumn(
+                "Entfernung",
                 format="%.2f",
             ),
-            "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
-            "Longitude": st.column_config.NumberColumn("Longitude", format="%.6f"),
         },
     )
