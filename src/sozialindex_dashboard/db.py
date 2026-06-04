@@ -26,6 +26,26 @@ COLUMNS = [
     "latitude",
     "longitude",
     "geo_match_status",
+    "schuldaten_schulform",
+    "schulbezeichnung_1",
+    "schulbezeichnung_2",
+    "schulbezeichnung_3",
+    "kurzbezeichnung",
+    "schuldaten_bezirksregierung",
+    "telefonvorwahl",
+    "telefon",
+    "faxvorwahl",
+    "fax",
+    "email",
+    "homepage",
+    "rechtsform",
+    "traegernummer",
+    "gemeindeschluessel",
+    "schulbetriebsschluessel",
+    "schulbetriebsdatum",
+    "epsg",
+    "utm_rechtswert",
+    "utm_hochwert",
 ]
 
 
@@ -40,7 +60,7 @@ def write_schulen(
     imported_at: datetime | None = None,
 ) -> None:
     imported_at = imported_at or datetime.now(timezone.utc)
-    with connect(db_path, read_only=True) as con:
+    with connect(db_path) as con:
         con.execute(f"DROP TABLE IF EXISTS {TABLE_NAME}")
         con.register("schulen_df", df[COLUMNS])
         con.execute(
@@ -58,7 +78,27 @@ def write_schulen(
                 ort::TEXT AS ort,
                 latitude::DOUBLE AS latitude,
                 longitude::DOUBLE AS longitude,
-                geo_match_status::TEXT AS geo_match_status
+                geo_match_status::TEXT AS geo_match_status,
+                schuldaten_schulform::TEXT AS schuldaten_schulform,
+                schulbezeichnung_1::TEXT AS schulbezeichnung_1,
+                schulbezeichnung_2::TEXT AS schulbezeichnung_2,
+                schulbezeichnung_3::TEXT AS schulbezeichnung_3,
+                kurzbezeichnung::TEXT AS kurzbezeichnung,
+                schuldaten_bezirksregierung::TEXT AS schuldaten_bezirksregierung,
+                telefonvorwahl::TEXT AS telefonvorwahl,
+                telefon::TEXT AS telefon,
+                faxvorwahl::TEXT AS faxvorwahl,
+                fax::TEXT AS fax,
+                email::TEXT AS email,
+                homepage::TEXT AS homepage,
+                rechtsform::TEXT AS rechtsform,
+                traegernummer::TEXT AS traegernummer,
+                gemeindeschluessel::TEXT AS gemeindeschluessel,
+                schulbetriebsschluessel::TEXT AS schulbetriebsschluessel,
+                schulbetriebsdatum::TEXT AS schulbetriebsdatum,
+                epsg::TEXT AS epsg,
+                utm_rechtswert::DOUBLE AS utm_rechtswert,
+                utm_hochwert::DOUBLE AS utm_hochwert
             FROM schulen_df
             """
         )
@@ -85,18 +125,7 @@ def read_schulen(db_path: Path = DB_PATH) -> pd.DataFrame:
         return con.execute(
             f"""
             SELECT
-                bezirksregierung,
-                kreis_kreisfreie_stadt,
-                schulform,
-                schulnummer,
-                schulname,
-                sozialindexstufe,
-                strasse,
-                plz,
-                ort,
-                latitude,
-                longitude,
-                geo_match_status
+                *
             FROM {TABLE_NAME}
             ORDER BY
                 bezirksregierung,
@@ -111,7 +140,7 @@ def read_imported_at(db_path: Path = DB_PATH) -> datetime | None:
     if not db_path.exists():
         return None
 
-    with connect(db_path) as con:
+    with connect(db_path, read_only=True) as con:
         metadata_exists = con.execute(
             """
             SELECT count(*)

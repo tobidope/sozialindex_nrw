@@ -25,6 +25,32 @@ SOCIALINDEX_COLUMNS = [
 SCHOOL_NUMBER_RE = re.compile(r"^\d{6}$")
 INDEX_RE = re.compile(r"^\d+$")
 UTM32_TO_WGS84 = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
+SCHOOL_BASE_COLUMN_MAP = {
+    "Schulnummer": "schulnummer",
+    "Schulform": "schuldaten_schulform",
+    "Schulbezeichnung_1": "schulbezeichnung_1",
+    "Schulbezeichnung_2": "schulbezeichnung_2",
+    "Schulbezeichnung_3": "schulbezeichnung_3",
+    "Kurzbezeichnung": "kurzbezeichnung",
+    "Bezirksregierung": "schuldaten_bezirksregierung",
+    "PLZ": "plz",
+    "Ort": "ort",
+    "Strasse": "strasse",
+    "Telefonvorwahl": "telefonvorwahl",
+    "Telefon": "telefon",
+    "Faxvorwahl": "faxvorwahl",
+    "Fax": "fax",
+    "E-Mail": "email",
+    "Homepage": "homepage",
+    "Rechtsform": "rechtsform",
+    "Traegernummer": "traegernummer",
+    "Gemeindeschluessel": "gemeindeschluessel",
+    "Schulbetriebsschluessel": "schulbetriebsschluessel",
+    "Schulbetriebsdatum": "schulbetriebsdatum",
+    "EPSG": "epsg",
+    "UTMRechtswert": "utm_rechtswert",
+    "UTMHochwert": "utm_hochwert",
+}
 
 
 def download_pdf(url: str, target_path: Path = PDF_PATH) -> Path:
@@ -130,7 +156,19 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
 
 
 def _read_school_base_data(url: str) -> pd.DataFrame:
-    raw_df = pd.read_csv(url, sep=";", encoding="utf-8", skiprows=1, dtype={"PLZ": "string"})
+    raw_df = pd.read_csv(
+        url,
+        sep=";",
+        encoding="utf-8",
+        skiprows=1,
+        dtype={
+            "PLZ": "string",
+            "Telefonvorwahl": "string",
+            "Telefon": "string",
+            "Faxvorwahl": "string",
+            "Fax": "string",
+        },
+    )
     required_columns = {
         "Schulnummer",
         "PLZ",
@@ -147,23 +185,14 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
             + ", ".join(missing_columns)
         )
 
-    df = raw_df[list(required_columns)].rename(
-        columns={
-            "Schulnummer": "schulnummer",
-            "PLZ": "plz",
-            "Ort": "ort",
-            "Strasse": "strasse",
-            "EPSG": "epsg",
-            "UTMRechtswert": "utm_rechtswert",
-            "UTMHochwert": "utm_hochwert",
-        }
-    )
+    df = raw_df[list(SCHOOL_BASE_COLUMN_MAP)].rename(columns=SCHOOL_BASE_COLUMN_MAP)
     df["schulnummer"] = pd.to_numeric(df["schulnummer"], errors="raise").astype("int64")
     df["utm_rechtswert"] = pd.to_numeric(df["utm_rechtswert"], errors="coerce")
     df["utm_hochwert"] = pd.to_numeric(df["utm_hochwert"], errors="coerce")
-    df["plz"] = df["plz"].astype("string").str.strip()
-    df["ort"] = df["ort"].astype("string").str.strip()
-    df["strasse"] = df["strasse"].astype("string").str.strip()
+
+    for column in df.columns:
+        if column not in {"schulnummer", "utm_rechtswert", "utm_hochwert"}:
+            df[column] = df[column].astype("string").str.strip()
 
     has_utm32 = (
         df["epsg"].astype("string").str.upper().str.strip().eq("EPSG:25832")
@@ -180,7 +209,7 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
         df.loc[has_utm32, "longitude"] = longitudes
         df.loc[has_utm32, "latitude"] = latitudes
 
-    return df[["schulnummer", "strasse", "plz", "ort", "latitude", "longitude"]]
+    return df
 
 
 def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:

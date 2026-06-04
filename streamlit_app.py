@@ -142,10 +142,27 @@ def google_maps_search_link(row: pd.Series) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={quote_plus(query)}"
 
 
+def school_homepage_link(row: pd.Series) -> str | None:
+    homepage = str(row.get("homepage") or "").strip()
+    if not homepage or homepage == "<NA>":
+        return None
+    if homepage.startswith(("http://", "https://")):
+        return homepage
+    return f"https://{homepage}"
+
+
+def school_homepage_display_link(row: pd.Series) -> str:
+    school_name = str(row.get("schulname") or "").strip()
+    homepage = school_homepage_link(row)
+    if homepage is None:
+        return f"#schule={school_name}"
+    return f"{homepage}#schule={school_name}"
+
+
 def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
     list_df = pd.DataFrame(
         {
-            "Schule": df["schulname"],
+            "Schule": df.apply(school_homepage_display_link, axis=1),
             "Schulform": df["schulform"],
             "Sozialindex": df["sozialindexstufe"],
             "Adresse": df.apply(format_address, axis=1),
@@ -410,6 +427,10 @@ with st.container(border=True):
         hide_index=True,
         column_order=list(display_df.columns),
         column_config={
+            "Schule": st.column_config.LinkColumn(
+                "Schule",
+                display_text=r"#schule=(.*)$",
+            ),
             "Sozialindex": st.column_config.NumberColumn(
                 "Sozialindex",
                 format="%d",
