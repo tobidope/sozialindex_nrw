@@ -94,7 +94,7 @@ def load_summary(
     )
 
 
-@st.cache_data(show_spinner=False, max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=10)
 def load_sozialindex_counts(
     db_mtime: float,
     query: str,
@@ -119,7 +119,7 @@ def load_sozialindex_counts(
     )
 
 
-@st.cache_data(show_spinner=False, max_entries=1)
+@st.cache_data(show_spinner=False, max_entries=10)
 def load_schulform_counts(
     db_mtime: float,
     query: str,

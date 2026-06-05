@@ -61,6 +61,12 @@ def _placeholders(values: list[Any]) -> str:
 
 
 def _distance_expression() -> str:
+    """Return a SQL Haversine expression for distance in kilometers.
+
+    The placeholders expect origin latitude, origin latitude again, and origin
+    longitude. The destination coordinates are read from the table columns
+    latitude and longitude.
+    """
     return """
         6371.0088 * 2 * asin(
             sqrt(
