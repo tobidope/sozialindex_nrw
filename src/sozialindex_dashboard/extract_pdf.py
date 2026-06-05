@@ -4,28 +4,39 @@ import argparse
 from datetime import datetime, timezone
 import re
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, TypedDict, cast
 from urllib.request import urlretrieve
 
 import pandas as pd
 import pdfplumber
+from pdfplumber.page import Page
 from pyproj import Transformer
 
 from sozialindex_dashboard.config import load_source_config
-from sozialindex_dashboard.db import COLUMNS, DB_PATH, PDF_PATH, write_schulen
+from sozialindex_dashboard.db import COLUMNS, DATA_DIR, DB_PATH, write_schulen
 
-SOCIALINDEX_COLUMNS = [
+type ExtractedRow = dict[str, str | int]
+
+
+class PdfWord(TypedDict):
+    text: str
+    x0: float
+    top: float
+
+
+PDF_PATH: Path = DATA_DIR / "sozialindex_schulliste_schuljahr_2025-26.pdf"
+SOCIALINDEX_COLUMNS: tuple[str, ...] = (
     "bezirksregierung",
     "kreis_kreisfreie_stadt",
     "schulform",
     "schulnummer",
     "schulname",
     "sozialindexstufe",
-]
+)
 SCHOOL_NUMBER_RE = re.compile(r"^\d{6}$")
 INDEX_RE = re.compile(r"^\d+$")
 UTM32_TO_WGS84 = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
-SCHOOL_BASE_COLUMN_MAP = {
+SCHOOL_BASE_COLUMN_MAP: dict[str, str] = {
     "Schulnummer": "schulnummer",
     "Schulform": "schuldaten_schulform",
     "Schulbezeichnung_1": "schulbezeichnung_1",
@@ -59,27 +70,30 @@ def download_pdf(url: str, target_path: Path = PDF_PATH) -> Path:
     return target_path
 
 
-def _join_words(words: Iterable[dict]) -> str:
+def _join_words(words: Iterable[PdfWord]) -> str:
     return " ".join(
         word["text"] for word in sorted(words, key=lambda item: item["x0"])
     ).strip()
 
 
-def _line_key(word: dict) -> int:
+def _line_key(word: PdfWord) -> int:
     return round(float(word["top"]))
 
 
-def _extract_line_rows(page) -> list[dict[str, str | int]]:
-    words = [
-        word
-        for word in page.extract_words(x_tolerance=1, y_tolerance=3)
-        if 92 <= float(word["top"]) <= page.height - 35
-    ]
-    grouped: dict[int, list[dict]] = {}
+def _extract_line_rows(page: Page) -> list[ExtractedRow]:
+    words = cast(
+        list[PdfWord],
+        [
+            word
+            for word in page.extract_words(x_tolerance=1, y_tolerance=3)
+            if 92 <= float(word["top"]) <= page.height - 35
+        ],
+    )
+    grouped: dict[int, list[PdfWord]] = {}
     for word in words:
         grouped.setdefault(_line_key(word), []).append(word)
 
-    rows: list[dict[str, str | int]] = []
+    rows: list[ExtractedRow] = []
     for line_words in grouped.values():
         text = _join_words(line_words)
         if not text or text.startswith(("Bezirksregierung", "Seite ")):
@@ -99,7 +113,7 @@ def _extract_line_rows(page) -> list[dict[str, str | int]]:
         number_word = min(number_words, key=lambda word: abs(float(word["x0"]) - 300))
         index_word = max(index_words, key=lambda word: float(word["x0"]))
 
-        row = {
+        row: ExtractedRow = {
             "bezirksregierung": _join_words(
                 word for word in line_words if 70 <= float(word["x0"]) < 130
             ),
@@ -126,7 +140,7 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
         "kreis_kreisfreie_stadt": "",
         "schulform": "",
     }
-    records: list[dict[str, str | int]] = []
+    records: list[ExtractedRow] = []
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:

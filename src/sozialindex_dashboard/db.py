@@ -7,7 +7,6 @@ import duckdb
 import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
-PDF_PATH = ROOT_DIR / "sozialindex_schulliste_schuljahr_2025-26.pdf"
 DATA_DIR = ROOT_DIR / "data"
 DB_PATH = DATA_DIR / "sozialindex.duckdb"
 TABLE_NAME = "schulen"
