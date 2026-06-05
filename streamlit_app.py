@@ -15,7 +15,9 @@ from sozialindex_dashboard.geo import (
 )
 from sozialindex_dashboard.geolocation import browser_geolocation
 
-NRW_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/8/83/Wappenzeichen_NRW.svg"
+NRW_LOGO_URL = (
+    "https://upload.wikimedia.org/wikipedia/commons/8/83/Wappenzeichen_NRW.svg"
+)
 
 st.set_page_config(
     page_title="Sozialindex Schulen NRW",

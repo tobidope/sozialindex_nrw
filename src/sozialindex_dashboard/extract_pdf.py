@@ -60,7 +60,9 @@ def download_pdf(url: str, target_path: Path = PDF_PATH) -> Path:
 
 
 def _join_words(words: Iterable[dict]) -> str:
-    return " ".join(word["text"] for word in sorted(words, key=lambda item: item["x0"])).strip()
+    return " ".join(
+        word["text"] for word in sorted(words, key=lambda item: item["x0"])
+    ).strip()
 
 
 def _line_key(word: dict) -> int:
@@ -83,7 +85,9 @@ def _extract_line_rows(page) -> list[dict[str, str | int]]:
         if not text or text.startswith(("Bezirksregierung", "Seite ")):
             continue
 
-        number_words = [word for word in line_words if SCHOOL_NUMBER_RE.match(word["text"])]
+        number_words = [
+            word for word in line_words if SCHOOL_NUMBER_RE.match(word["text"])
+        ]
         index_words = [
             word
             for word in line_words
@@ -139,8 +143,15 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
         raise RuntimeError(f"No school rows could be extracted from {pdf_path}")
 
     df["schulnummer"] = pd.to_numeric(df["schulnummer"], errors="raise").astype("int64")
-    df["schulname"] = df["schulname"].astype("string").str.replace(r"\s+", " ", regex=True).str.strip()
-    df["sozialindexstufe"] = pd.to_numeric(df["sozialindexstufe"], errors="raise").astype("int64")
+    df["schulname"] = (
+        df["schulname"]
+        .astype("string")
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+    df["sozialindexstufe"] = pd.to_numeric(
+        df["sozialindexstufe"], errors="raise"
+    ).astype("int64")
     df = df.dropna(subset=["schulnummer", "schulname", "sozialindexstufe"])
     df = df.drop_duplicates(subset=["schulnummer"]).reset_index(drop=True)
 
@@ -221,8 +232,14 @@ def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:
 
 def main() -> None:
     source_config = load_source_config()
-    parser = argparse.ArgumentParser(description="Extract NRW Sozialindex school data into DuckDB.")
-    parser.add_argument("--pdf", type=Path, help="Source PDF path. If omitted, the configured PDF URL is downloaded.")
+    parser = argparse.ArgumentParser(
+        description="Extract NRW Sozialindex school data into DuckDB."
+    )
+    parser.add_argument(
+        "--pdf",
+        type=Path,
+        help="Source PDF path. If omitted, the configured PDF URL is downloaded.",
+    )
     parser.add_argument("--db", type=Path, default=DB_PATH, help="Target DuckDB path")
     parser.add_argument(
         "--pdf-url",

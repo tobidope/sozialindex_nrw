@@ -33,13 +33,21 @@ def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
         config = tomllib.load(file)
 
     sources = config.get("sources", {})
-    socialindex_pdf_url = sources.get("socialindex_pdf_url", DEFAULT_SOCIALINDEX_PDF_URL)
-    school_base_data_url = sources.get("school_base_data_url", DEFAULT_SCHOOL_BASE_DATA_URL)
+    socialindex_pdf_url = sources.get(
+        "socialindex_pdf_url", DEFAULT_SOCIALINDEX_PDF_URL
+    )
+    school_base_data_url = sources.get(
+        "school_base_data_url", DEFAULT_SCHOOL_BASE_DATA_URL
+    )
 
     if not isinstance(socialindex_pdf_url, str) or not socialindex_pdf_url.strip():
-        raise RuntimeError("config.toml sources.socialindex_pdf_url must be a non-empty string.")
+        raise RuntimeError(
+            "config.toml sources.socialindex_pdf_url must be a non-empty string."
+        )
     if not isinstance(school_base_data_url, str) or not school_base_data_url.strip():
-        raise RuntimeError("config.toml sources.school_base_data_url must be a non-empty string.")
+        raise RuntimeError(
+            "config.toml sources.school_base_data_url must be a non-empty string."
+        )
 
     return SourceConfig(
         socialindex_pdf_url=socialindex_pdf_url.strip(),

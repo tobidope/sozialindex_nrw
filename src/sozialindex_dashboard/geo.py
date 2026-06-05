@@ -16,7 +16,9 @@ def parse_coordinate(value: str, minimum: float, maximum: float) -> float | None
     return None
 
 
-def add_distance_km(df: pd.DataFrame, latitude: float, longitude: float) -> pd.DataFrame:
+def add_distance_km(
+    df: pd.DataFrame, latitude: float, longitude: float
+) -> pd.DataFrame:
     schools = df.copy()
     lat1 = np.radians(latitude)
     lon1 = np.radians(longitude)
@@ -24,7 +26,9 @@ def add_distance_km(df: pd.DataFrame, latitude: float, longitude: float) -> pd.D
     lon2 = np.radians(schools["longitude"].astype(float))
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    haversine = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    haversine = (
+        np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    )
     schools["entfernung_km"] = 6371.0088 * 2 * np.arcsin(np.sqrt(haversine))
     return schools
 
