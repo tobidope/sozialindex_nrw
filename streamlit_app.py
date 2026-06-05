@@ -16,12 +16,24 @@ from sozialindex_dashboard.db import (
     read_sozialindex_counts,
     read_summary,
 )
-from sozialindex_dashboard.geo import socialindex_color
 from sozialindex_dashboard.geolocation import browser_geolocation
 
 NRW_LOGO_URL = (
     "https://upload.wikimedia.org/wikipedia/commons/8/83/Wappenzeichen_NRW.svg"
 )
+SOCIALINDEX_COLORS: dict[int, str] = {
+    1: "#29B09D",
+    2: "#7DEFA1",
+    3: "#83C9FF",
+    4: "#0068C9",
+    5: "#FFD16A",
+    6: "#FF8700",
+    7: "#FFABAB",
+    8: "#FF2B2B",
+    9: "#6D3FC0",
+}
+DEFAULT_MAP_COLOR = "#808495"
+MAP_COLOR_ALPHA = 220
 
 st.set_page_config(
     page_title="Sozialindex Schulen NRW",
@@ -144,11 +156,10 @@ def load_schulform_counts(
 def render_socialindex_legend() -> None:
     items = []
     for index in range(1, 10):
-        red, green, blue, _alpha = socialindex_color(index)
         items.append(
             f"""
             <div class="legend-item">
-                <span class="legend-swatch" style="background: rgb({red}, {green}, {blue});"></span>
+                <span class="legend-swatch" style="background: {SOCIALINDEX_COLORS[index]};"></span>
                 <span>{index}</span>
             </div>
             """
@@ -189,6 +200,20 @@ def render_socialindex_legend() -> None:
         </div>
         """
     )
+
+
+def hex_to_rgba(hex_color: str, alpha: int = MAP_COLOR_ALPHA) -> list[int]:
+    color = hex_color.removeprefix("#")
+    return [
+        int(color[0:2], 16),
+        int(color[2:4], 16),
+        int(color[4:6], 16),
+        alpha,
+    ]
+
+
+def socialindex_color(index: int) -> list[int]:
+    return hex_to_rgba(SOCIALINDEX_COLORS.get(int(index), DEFAULT_MAP_COLOR))
 
 
 def format_address(row: pd.Series) -> str:
