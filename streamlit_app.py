@@ -39,12 +39,12 @@ def load_filter_options(db_mtime: float) -> dict[str, list]:
     return read_filter_options(DB_PATH)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_imported_at(db_mtime: float):
     return read_imported_at(DB_PATH)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_schools(
     db_mtime: float,
     query: str,
@@ -69,7 +69,7 @@ def load_schools(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_summary(
     db_mtime: float,
     query: str,
@@ -94,7 +94,7 @@ def load_summary(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_sozialindex_counts(
     db_mtime: float,
     query: str,
@@ -119,7 +119,7 @@ def load_sozialindex_counts(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=1)
 def load_schulform_counts(
     db_mtime: float,
     query: str,
