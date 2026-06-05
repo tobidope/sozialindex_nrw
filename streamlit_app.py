@@ -7,9 +7,16 @@ import pydeck as pdk
 import streamlit as st
 
 from sozialindex_dashboard.config import load_source_config
-from sozialindex_dashboard.db import DB_PATH, read_imported_at, read_schulen
+from sozialindex_dashboard.db import (
+    DB_PATH,
+    query_schulen,
+    read_filter_options,
+    read_imported_at,
+    read_schulform_counts,
+    read_sozialindex_counts,
+    read_summary,
+)
 from sozialindex_dashboard.geo import (
-    add_distance_km,
     parse_coordinate,
     socialindex_color,
 )
@@ -28,8 +35,8 @@ st.logo(NRW_LOGO_URL, size="medium", icon_image=NRW_LOGO_URL)
 
 
 @st.cache_data(show_spinner=False)
-def load_data(db_mtime: float) -> pd.DataFrame:
-    return read_schulen(DB_PATH)
+def load_filter_options(db_mtime: float) -> dict[str, list]:
+    return read_filter_options(DB_PATH)
 
 
 @st.cache_data(show_spinner=False)
@@ -37,36 +44,104 @@ def load_imported_at(db_mtime: float):
     return read_imported_at(DB_PATH)
 
 
-def filter_data(
-    df: pd.DataFrame,
+@st.cache_data(show_spinner=False)
+def load_schools(
+    db_mtime: float,
     query: str,
-    bezirksregierungen: list[str],
-    kreise: list[str],
-    schulformen: list[str],
-    sozialindexstufen: list[int],
+    bezirksregierungen: tuple[str, ...],
+    kreise: tuple[str, ...],
+    schulformen: tuple[str, ...],
+    sozialindexstufen: tuple[int, ...],
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: int | None,
 ) -> pd.DataFrame:
-    filtered = df.copy()
+    return query_schulen(
+        query=query,
+        bezirksregierungen=list(bezirksregierungen),
+        kreise=list(kreise),
+        schulformen=list(schulformen),
+        sozialindexstufen=list(sozialindexstufen),
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        db_path=DB_PATH,
+    )
 
-    if query:
-        search_space = (
-            filtered["kurzbezeichnung"].astype(str)
-            + " "
-            + filtered["schulname"].astype(str)
-            + " "
-            + filtered["schulnummer"].astype(str)
-        ).str.lower()
-        filtered = filtered[search_space.str.contains(query.lower(), regex=False)]
 
-    if bezirksregierungen:
-        filtered = filtered[filtered["bezirksregierung"].isin(bezirksregierungen)]
-    if kreise:
-        filtered = filtered[filtered["kreis_kreisfreie_stadt"].isin(kreise)]
-    if schulformen:
-        filtered = filtered[filtered["schulform"].isin(schulformen)]
-    if sozialindexstufen:
-        filtered = filtered[filtered["sozialindexstufe"].isin(sozialindexstufen)]
+@st.cache_data(show_spinner=False)
+def load_summary(
+    db_mtime: float,
+    query: str,
+    bezirksregierungen: tuple[str, ...],
+    kreise: tuple[str, ...],
+    schulformen: tuple[str, ...],
+    sozialindexstufen: tuple[int, ...],
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: int | None,
+) -> dict:
+    return read_summary(
+        query=query,
+        bezirksregierungen=list(bezirksregierungen),
+        kreise=list(kreise),
+        schulformen=list(schulformen),
+        sozialindexstufen=list(sozialindexstufen),
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        db_path=DB_PATH,
+    )
 
-    return filtered
+
+@st.cache_data(show_spinner=False)
+def load_sozialindex_counts(
+    db_mtime: float,
+    query: str,
+    bezirksregierungen: tuple[str, ...],
+    kreise: tuple[str, ...],
+    schulformen: tuple[str, ...],
+    sozialindexstufen: tuple[int, ...],
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: int | None,
+) -> pd.DataFrame:
+    return read_sozialindex_counts(
+        query=query,
+        bezirksregierungen=list(bezirksregierungen),
+        kreise=list(kreise),
+        schulformen=list(schulformen),
+        sozialindexstufen=list(sozialindexstufen),
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        db_path=DB_PATH,
+    )
+
+
+@st.cache_data(show_spinner=False)
+def load_schulform_counts(
+    db_mtime: float,
+    query: str,
+    bezirksregierungen: tuple[str, ...],
+    kreise: tuple[str, ...],
+    schulformen: tuple[str, ...],
+    sozialindexstufen: tuple[int, ...],
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: int | None,
+) -> pd.DataFrame:
+    return read_schulform_counts(
+        query=query,
+        bezirksregierungen=list(bezirksregierungen),
+        kreise=list(kreise),
+        schulformen=list(schulformen),
+        sozialindexstufen=list(sozialindexstufen),
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        db_path=DB_PATH,
+    )
 
 
 def render_socialindex_legend() -> None:
@@ -190,13 +265,13 @@ def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
 
 source_config = load_source_config()
 db_mtime = DB_PATH.stat().st_mtime if DB_PATH.exists() else 0
-df = load_data(db_mtime)
+filter_options = load_filter_options(db_mtime)
 imported_at = load_imported_at(db_mtime)
 
 st.title("Sozialindex Schulen NRW")
 st.caption("Schuljahr 2025/2026")
 
-if df.empty:
+if not DB_PATH.exists():
     st.warning(
         "Noch keine Datenbank gefunden. Führe zuerst "
         "`uv run python -m sozialindex_dashboard.extract_pdf` aus."
@@ -253,71 +328,100 @@ with st.sidebar:
     )
     selected_bezirksregierungen = st.multiselect(
         "Bezirksregierung",
-        sorted(df["bezirksregierung"].dropna().unique()),
+        filter_options["bezirksregierung"],
         placeholder="Bezirksregierung auswählen",
         key="bezirksregierungen",
         bind="query-params",
     )
     selected_kreise = st.multiselect(
         "Kreis / Kreisfreie Stadt",
-        sorted(df["kreis_kreisfreie_stadt"].dropna().unique()),
+        filter_options["kreis_kreisfreie_stadt"],
         placeholder="Kreis oder Stadt auswählen",
         key="kreis_stadt",
         bind="query-params",
     )
     selected_schulformen = st.multiselect(
         "Schulform",
-        sorted(df["schulform"].dropna().unique()),
+        filter_options["schulform"],
         placeholder="Schulform auswählen",
         key="schulformen",
         bind="query-params",
     )
     selected_sozialindexstufen = st.multiselect(
         "Sozialindexstufe",
-        sorted(df["sozialindexstufe"].dropna().unique()),
+        filter_options["sozialindexstufe"],
         placeholder="Sozialindexstufe auswählen",
         key="sozialindexstufen",
         bind="query-params",
     )
 
-filtered_df = filter_data(
-    df,
+origin_available = manual_latitude is not None and manual_longitude is not None
+origin_latitude = float(manual_latitude) if origin_available else None
+origin_longitude = float(manual_longitude) if origin_available else None
+active_radius_km = radius_km if origin_available else None
+selected_bezirksregierungen_tuple = tuple(selected_bezirksregierungen)
+selected_kreise_tuple = tuple(selected_kreise)
+selected_schulformen_tuple = tuple(selected_schulformen)
+selected_sozialindexstufen_tuple = tuple(int(value) for value in selected_sozialindexstufen)
+
+result_df = load_schools(
+    db_mtime,
     query,
-    selected_bezirksregierungen,
-    selected_kreise,
-    selected_schulformen,
-    selected_sozialindexstufen,
+    selected_bezirksregierungen_tuple,
+    selected_kreise_tuple,
+    selected_schulformen_tuple,
+    selected_sozialindexstufen_tuple,
+    origin_latitude,
+    origin_longitude,
+    active_radius_km,
+)
+summary = load_summary(
+    db_mtime,
+    query,
+    selected_bezirksregierungen_tuple,
+    selected_kreise_tuple,
+    selected_schulformen_tuple,
+    selected_sozialindexstufen_tuple,
+    origin_latitude,
+    origin_longitude,
+    active_radius_km,
+)
+index_counts = load_sozialindex_counts(
+    db_mtime,
+    query,
+    selected_bezirksregierungen_tuple,
+    selected_kreise_tuple,
+    selected_schulformen_tuple,
+    selected_sozialindexstufen_tuple,
+    origin_latitude,
+    origin_longitude,
+    active_radius_km,
+)
+form_counts = load_schulform_counts(
+    db_mtime,
+    query,
+    selected_bezirksregierungen_tuple,
+    selected_kreise_tuple,
+    selected_schulformen_tuple,
+    selected_sozialindexstufen_tuple,
+    origin_latitude,
+    origin_longitude,
+    active_radius_km,
 )
 
-origin_available = manual_latitude is not None and manual_longitude is not None
-schools_with_coordinates = filtered_df.dropna(subset=["latitude", "longitude"]).copy()
-schools_in_radius = pd.DataFrame(columns=[*filtered_df.columns, "entfernung_km"])
-if origin_available and not schools_with_coordinates.empty:
-    schools_with_distance = add_distance_km(
-        schools_with_coordinates,
-        float(manual_latitude),
-        float(manual_longitude),
-    )
-    schools_in_radius = schools_with_distance[
-        schools_with_distance["entfernung_km"] <= radius_km
-    ].sort_values("entfernung_km")
-
-result_df = schools_in_radius if origin_available else filtered_df
-result_with_coordinates = result_df.dropna(subset=["latitude", "longitude"]).copy()
-
 with st.container(horizontal=True):
-    st.metric("Schulen", f"{len(result_df):,}".replace(",", "."), border=True)
+    st.metric("Schulen", f"{summary['schulen']:,}".replace(",", "."), border=True)
     st.metric(
         "Kreise / kreisfreie Städte",
-        f"{result_df['kreis_kreisfreie_stadt'].nunique():,}".replace(",", "."),
+        f"{summary['kreise']:,}".replace(",", "."),
         border=True,
     )
     st.metric(
         "Schulformen",
-        f"{result_df['schulform'].nunique():,}".replace(",", "."),
+        f"{summary['schulformen']:,}".replace(",", "."),
         border=True,
     )
-    average_index = result_df["sozialindexstufe"].mean()
+    average_index = summary["durchschnitt_sozialindex"]
     st.metric(
         "Durchschnittliche Stufe",
         f"{average_index:.1f}" if pd.notna(average_index) else "-",
@@ -325,7 +429,7 @@ with st.container(horizontal=True):
     )
     st.metric(
         "Mit Koordinaten",
-        f"{result_with_coordinates['schulnummer'].nunique():,}".replace(",", "."),
+        f"{summary['mit_koordinaten']:,}".replace(",", "."),
         border=True,
     )
 
@@ -333,10 +437,10 @@ with st.container(border=True):
     st.subheader("Schulen im Umkreis")
     if not origin_available:
         st.info("Standort ermitteln oder Latitude und Longitude eingeben.")
-    elif schools_in_radius.empty:
+    elif result_df.empty:
         st.info("Keine Schulen im gewählten Radius gefunden.")
     else:
-        map_df = schools_in_radius.copy()
+        map_df = result_df.copy()
         map_df["radius_m"] = 100
         map_df["farbe"] = map_df["sozialindexstufe"].apply(socialindex_color)
         map_df["entfernung_karte"] = map_df["entfernung_km"].map(
@@ -398,12 +502,6 @@ chart_col, form_col = st.columns(2)
 with chart_col:
     with st.container(border=True):
         st.subheader("Verteilung nach Sozialindexstufe")
-        index_counts = (
-            result_df.groupby("sozialindexstufe", as_index=False)
-            .size()
-            .rename(columns={"size": "Anzahl Schulen"})
-            .sort_values("sozialindexstufe")
-        )
         st.bar_chart(
             index_counts,
             x="sozialindexstufe",
@@ -415,12 +513,6 @@ with chart_col:
 with form_col:
     with st.container(border=True):
         st.subheader("Schulen nach Schulform")
-        form_counts = (
-            result_df.groupby("schulform", as_index=False)
-            .size()
-            .rename(columns={"size": "Anzahl Schulen"})
-            .sort_values("Anzahl Schulen", ascending=False)
-        )
         st.bar_chart(
             form_counts,
             x="schulform",

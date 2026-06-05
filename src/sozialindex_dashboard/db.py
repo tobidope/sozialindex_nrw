@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import duckdb
 import pandas as pd
@@ -46,6 +47,95 @@ COLUMNS = [
     "utm_rechtswert",
     "utm_hochwert",
 ]
+
+FILTER_OPTION_COLUMNS = [
+    "bezirksregierung",
+    "kreis_kreisfreie_stadt",
+    "schulform",
+    "sozialindexstufe",
+]
+
+
+def _placeholders(values: list[Any]) -> str:
+    return ", ".join("?" for _ in values)
+
+
+def _distance_expression() -> str:
+    return """
+        6371.0088 * 2 * asin(
+            sqrt(
+                pow(sin((radians(latitude) - radians(?)) / 2), 2)
+                + cos(radians(?))
+                * cos(radians(latitude))
+                * pow(sin((radians(longitude) - radians(?)) / 2), 2)
+            )
+        )
+    """
+
+
+def _build_filtered_query(
+    *,
+    query: str,
+    bezirksregierungen: list[str],
+    kreise: list[str],
+    schulformen: list[str],
+    sozialindexstufen: list[int],
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: int | None = None,
+) -> tuple[str, list[Any]]:
+    select_fields = "*"
+    params: list[Any] = []
+    clauses: list[str] = []
+    distance_expr = None
+
+    if latitude is not None and longitude is not None:
+        distance_expr = _distance_expression()
+        select_fields = f"*, {distance_expr} AS entfernung_km"
+        params.extend([latitude, latitude, longitude])
+
+    if query:
+        clauses.append(
+            """
+            contains(
+                lower(
+                    coalesce(kurzbezeichnung, '')
+                    || ' '
+                    || coalesce(schulname, '')
+                    || ' '
+                    || cast(schulnummer AS VARCHAR)
+                ),
+                lower(?)
+            )
+            """
+        )
+        params.append(query)
+
+    if bezirksregierungen:
+        clauses.append(f"bezirksregierung IN ({_placeholders(bezirksregierungen)})")
+        params.extend(bezirksregierungen)
+    if kreise:
+        clauses.append(f"kreis_kreisfreie_stadt IN ({_placeholders(kreise)})")
+        params.extend(kreise)
+    if schulformen:
+        clauses.append(f"schulform IN ({_placeholders(schulformen)})")
+        params.extend(schulformen)
+    if sozialindexstufen:
+        clauses.append(f"sozialindexstufe IN ({_placeholders(sozialindexstufen)})")
+        params.extend(sozialindexstufen)
+
+    if distance_expr is not None and radius_km is not None:
+        clauses.append("latitude IS NOT NULL AND longitude IS NOT NULL")
+        clauses.append(f"{distance_expr} <= ?")
+        params.extend([latitude, latitude, longitude, radius_km])
+
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"""
+        SELECT {select_fields}
+        FROM {TABLE_NAME}
+        {where_sql}
+    """
+    return sql, params
 
 
 def connect(
@@ -134,6 +224,182 @@ def read_schulen(db_path: Path = DB_PATH) -> pd.DataFrame:
                 schulform,
                 schulname
             """
+        ).df()
+
+
+def read_filter_options(db_path: Path = DB_PATH) -> dict[str, list]:
+    if not db_path.exists():
+        return {column: [] for column in FILTER_OPTION_COLUMNS}
+
+    options = {}
+    with connect(db_path, read_only=True) as con:
+        for column in FILTER_OPTION_COLUMNS:
+            rows = con.execute(
+                f"""
+                SELECT DISTINCT {column}
+                FROM {TABLE_NAME}
+                WHERE {column} IS NOT NULL
+                ORDER BY {column}
+                """
+            ).fetchall()
+            options[column] = [row[0] for row in rows]
+    return options
+
+
+def query_schulen(
+    *,
+    query: str,
+    bezirksregierungen: list[str],
+    kreise: list[str],
+    schulformen: list[str],
+    sozialindexstufen: list[int],
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: int | None = None,
+    db_path: Path = DB_PATH,
+) -> pd.DataFrame:
+    if not db_path.exists():
+        return pd.DataFrame(columns=COLUMNS)
+
+    sql, params = _build_filtered_query(
+        query=query,
+        bezirksregierungen=bezirksregierungen,
+        kreise=kreise,
+        schulformen=schulformen,
+        sozialindexstufen=sozialindexstufen,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+    )
+    order_sql = (
+        "ORDER BY entfernung_km, bezirksregierung, kreis_kreisfreie_stadt, schulform, schulname"
+        if latitude is not None and longitude is not None
+        else "ORDER BY bezirksregierung, kreis_kreisfreie_stadt, schulform, schulname"
+    )
+
+    with connect(db_path, read_only=True) as con:
+        return con.execute(f"{sql} {order_sql}", params).df()
+
+
+def read_summary(
+    *,
+    query: str,
+    bezirksregierungen: list[str],
+    kreise: list[str],
+    schulformen: list[str],
+    sozialindexstufen: list[int],
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: int | None = None,
+    db_path: Path = DB_PATH,
+) -> dict[str, int | float | None]:
+    if not db_path.exists():
+        return {
+            "schulen": 0,
+            "kreise": 0,
+            "schulformen": 0,
+            "durchschnitt_sozialindex": None,
+            "mit_koordinaten": 0,
+        }
+
+    sql, params = _build_filtered_query(
+        query=query,
+        bezirksregierungen=bezirksregierungen,
+        kreise=kreise,
+        schulformen=schulformen,
+        sozialindexstufen=sozialindexstufen,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+    )
+    with connect(db_path, read_only=True) as con:
+        row = con.execute(
+            f"""
+            SELECT
+                count(*) AS schulen,
+                count(DISTINCT kreis_kreisfreie_stadt) AS kreise,
+                count(DISTINCT schulform) AS schulformen,
+                avg(sozialindexstufe) AS durchschnitt_sozialindex,
+                count(latitude) AS mit_koordinaten
+            FROM ({sql}) filtered
+            """,
+            params,
+        ).fetchone()
+
+    return {
+        "schulen": row[0],
+        "kreise": row[1],
+        "schulformen": row[2],
+        "durchschnitt_sozialindex": row[3],
+        "mit_koordinaten": row[4],
+    }
+
+
+def read_sozialindex_counts(
+    *,
+    query: str,
+    bezirksregierungen: list[str],
+    kreise: list[str],
+    schulformen: list[str],
+    sozialindexstufen: list[int],
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: int | None = None,
+    db_path: Path = DB_PATH,
+) -> pd.DataFrame:
+    sql, params = _build_filtered_query(
+        query=query,
+        bezirksregierungen=bezirksregierungen,
+        kreise=kreise,
+        schulformen=schulformen,
+        sozialindexstufen=sozialindexstufen,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+    )
+    with connect(db_path, read_only=True) as con:
+        return con.execute(
+            f"""
+            SELECT sozialindexstufe, count(*) AS "Anzahl Schulen"
+            FROM ({sql}) filtered
+            GROUP BY sozialindexstufe
+            ORDER BY sozialindexstufe
+            """,
+            params,
+        ).df()
+
+
+def read_schulform_counts(
+    *,
+    query: str,
+    bezirksregierungen: list[str],
+    kreise: list[str],
+    schulformen: list[str],
+    sozialindexstufen: list[int],
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: int | None = None,
+    db_path: Path = DB_PATH,
+) -> pd.DataFrame:
+    sql, params = _build_filtered_query(
+        query=query,
+        bezirksregierungen=bezirksregierungen,
+        kreise=kreise,
+        schulformen=schulformen,
+        sozialindexstufen=sozialindexstufen,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+    )
+    with connect(db_path, read_only=True) as con:
+        return con.execute(
+            f"""
+            SELECT schulform, count(*) AS "Anzahl Schulen"
+            FROM ({sql}) filtered
+            GROUP BY schulform
+            ORDER BY "Anzahl Schulen" DESC
+            """,
+            params,
         ).df()
 
 
