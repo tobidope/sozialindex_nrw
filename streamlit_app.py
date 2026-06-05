@@ -16,10 +16,7 @@ from sozialindex_dashboard.db import (
     read_sozialindex_counts,
     read_summary,
 )
-from sozialindex_dashboard.geo import (
-    parse_coordinate,
-    socialindex_color,
-)
+from sozialindex_dashboard.geo import socialindex_color
 from sozialindex_dashboard.geolocation import browser_geolocation
 
 NRW_LOGO_URL = (
@@ -292,32 +289,32 @@ with st.sidebar:
     browser_latitude = getattr(location_result, "latitude", None)
     browser_longitude = getattr(location_result, "longitude", None)
     if browser_latitude is not None:
-        st.session_state["latitude"] = f"{float(browser_latitude):.6f}"
+        st.session_state["latitude"] = float(browser_latitude)
     else:
-        st.session_state.setdefault("latitude", "")
+        st.session_state.setdefault("latitude", None)
     if browser_longitude is not None:
-        st.session_state["longitude"] = f"{float(browser_longitude):.6f}"
+        st.session_state["longitude"] = float(browser_longitude)
     else:
-        st.session_state.setdefault("longitude", "")
+        st.session_state.setdefault("longitude", None)
 
-    latitude_text = st.text_input(
+    manual_latitude = st.number_input(
         "Latitude",
-        placeholder="z.B. 51.4818",
+        min_value=50.0,
+        max_value=53.0,
+        value=None,
+        format="%.6f",
         key="latitude",
         bind="query-params",
     )
-    longitude_text = st.text_input(
+    manual_longitude = st.number_input(
         "Longitude",
-        placeholder="z.B. 7.2162",
+        min_value=5.0,
+        max_value=10.0,
+        value=None,
+        format="%.6f",
         key="longitude",
         bind="query-params",
     )
-    manual_latitude = parse_coordinate(latitude_text, 50.0, 53.0)
-    manual_longitude = parse_coordinate(longitude_text, 5.0, 10.0)
-    if latitude_text and manual_latitude is None:
-        st.warning("Latitude muss zwischen 50.0 und 53.0 liegen.")
-    if longitude_text and manual_longitude is None:
-        st.warning("Longitude muss zwischen 5.0 und 10.0 liegen.")
 
     st.header("Filter")
     query = st.text_input(

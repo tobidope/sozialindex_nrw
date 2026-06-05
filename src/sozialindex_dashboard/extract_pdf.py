@@ -36,6 +36,8 @@ SOCIALINDEX_COLUMNS: tuple[str, ...] = (
 SCHOOL_NUMBER_RE = re.compile(r"^\d{6}$")
 INDEX_RE = re.compile(r"^\d+$")
 UTM32_TO_WGS84 = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
+NRW_LATITUDE_RANGE = (50.0, 53.0)
+NRW_LONGITUDE_RANGE = (5.0, 10.0)
 SCHOOL_BASE_COLUMN_MAP: dict[str, str] = {
     "Schulnummer": "schulnummer",
     "Schulform": "schuldaten_schulform",
@@ -180,6 +182,17 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
     return df
 
 
+def _normalize_coordinates(df: pd.DataFrame) -> pd.DataFrame:
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce").astype("Float64")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce").astype("Float64")
+
+    valid_coordinates = df["latitude"].between(*NRW_LATITUDE_RANGE) & df[
+        "longitude"
+    ].between(*NRW_LONGITUDE_RANGE)
+    df.loc[~valid_coordinates, ["latitude", "longitude"]] = pd.NA
+    return df
+
+
 def _read_school_base_data(url: str) -> pd.DataFrame:
     raw_df = pd.read_csv(
         url,
@@ -232,7 +245,7 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
         df.loc[has_utm32, "longitude"] = longitudes
         df.loc[has_utm32, "latitude"] = latitudes
 
-    return df
+    return _normalize_coordinates(df)
 
 
 def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:

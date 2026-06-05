@@ -1,18 +1,6 @@
 from __future__ import annotations
 
 
-def parse_coordinate(value: str, minimum: float, maximum: float) -> float | None:
-    if not value.strip():
-        return None
-    try:
-        coordinate = float(value.replace(",", "."))
-    except ValueError:
-        return None
-    if minimum <= coordinate <= maximum:
-        return coordinate
-    return None
-
-
 def socialindex_color(index: int) -> list[int]:
     colors = {
         1: [20, 108, 92, 210],
