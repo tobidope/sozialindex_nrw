@@ -16,21 +16,27 @@ CSS = """
   gap: 0.5rem;
   min-height: 2.5rem;
   font-family: var(--st-font, sans-serif);
+  font-size: var(--st-base-font-size, 1rem);
+  color: var(--st-text-color, #31333f);
 }
 
 #locate {
   appearance: none;
   min-height: 2.5rem;
   padding: 0.375rem 0.75rem;
-  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.35));
+  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
   border-radius: var(--st-button-radius, 0.5rem);
   background-color: var(--st-background-color, #ffffff);
   box-shadow: inset 0 0 0 1px transparent;
   color: var(--st-text-color, #31333f);
   font: inherit;
-  font-weight: 400;
-  line-height: 1.6;
+  font-weight: var(--st-base-font-weight, 400);
+  line-height: 1.5;
   cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease;
 }
 
 #locate:hover {
@@ -44,14 +50,20 @@ CSS = """
   outline-offset: 2px;
 }
 
+#locate:active:not(:disabled) {
+  color: var(--st-text-color, #31333f);
+  border-color: var(--st-primary-color, #ff4b4b);
+  box-shadow: inset 0 0 0 1px var(--st-primary-color, #ff4b4b);
+}
+
 #locate:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 #status {
-  color: var(--st-text-color, #31333f);
-  font-size: 0.875rem;
+  color: inherit;
+  font-size: 0.875em;
 }
 """
 
