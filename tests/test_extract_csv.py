@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import pandas as pd
 
-from sozialindex_dashboard.extract_csv import _read_school_base_data, extract_csv
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "import_socialindex_csv.py"
+spec = importlib.util.spec_from_file_location("import_socialindex_csv", SCRIPT_PATH)
+assert spec is not None
+assert spec.loader is not None
+import_socialindex_csv = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(import_socialindex_csv)
+
+_read_school_base_data = import_socialindex_csv._read_school_base_data
+extract_csv = import_socialindex_csv.extract_csv
 
 
 def test_extract_csv_reads_cp850_and_skips_rows_without_index(tmp_path):

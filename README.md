@@ -21,11 +21,12 @@ school_base_data_url = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuld
 Import nach DuckDB:
 
 ```bash
-uv run python -m sozialindex_dashboard.extract_csv
+uv run python scripts/import_socialindex_csv.py
 ```
 
-Der Import laedt die Sozialindex-CSV aus der konfigurierten URL, extrahiert die
-Sozialindexdaten und reichert sie mit den offiziellen NRW-Schulgrunddaten an.
+Der Import liest die Sozialindex-CSV aus der konfigurierten URL, extrahiert die
+Sozialindexdaten und reichert sie mit den offiziellen NRW-Schulgrunddaten an. Die
+Roh-CSV wird dabei nicht unter `data/` abgelegt.
 
 Die Datenbank wird unter `data/sozialindex.duckdb` erstellt. Die Schulgrunddaten
 liefern Adresse und UTM-Koordinaten, die beim Import nach WGS84 transformiert

@@ -296,7 +296,7 @@ st.caption("Schuljahr 2025/2026")
 if not DB_PATH.exists():
     st.warning(
         "Noch keine Datenbank gefunden. Führe zuerst "
-        "`uv run python -m sozialindex_dashboard.extract_csv` aus."
+        "`uv run python scripts/import_socialindex_csv.py` aus."
     )
     st.stop()
 

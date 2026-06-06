@@ -3,15 +3,13 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.request import urlretrieve
 
 import pandas as pd
 from pyproj import Transformer
 
 from sozialindex_dashboard.config import load_source_config
-from sozialindex_dashboard.db import COLUMNS, DATA_DIR, DB_PATH, write_schulen
+from sozialindex_dashboard.db import COLUMNS, DB_PATH, write_schulen
 
-SOCIALINDEX_CSV_PATH: Path = DATA_DIR / "schulliste_sj_25_26_open_data.csv"
 SOCIALINDEX_COLUMNS: tuple[str, ...] = (
     "bezirksregierung",
     "kreis_kreisfreie_stadt",
@@ -57,14 +55,8 @@ SCHOOL_BASE_COLUMN_MAP: dict[str, str] = {
 }
 
 
-def download_csv(url: str, target_path: Path = SOCIALINDEX_CSV_PATH) -> Path:
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    urlretrieve(url, target_path)
-    return target_path
-
-
-def extract_csv(csv_path: Path = SOCIALINDEX_CSV_PATH) -> pd.DataFrame:
-    raw_df = pd.read_csv(csv_path, sep=";", encoding="cp850", dtype="string")
+def extract_csv(source: str | Path) -> pd.DataFrame:
+    raw_df = pd.read_csv(source, sep=";", encoding="cp850", dtype="string")
     missing_columns = sorted(set(SOCIALINDEX_COLUMN_MAP) - set(raw_df.columns))
     if missing_columns:
         raise RuntimeError(
@@ -89,7 +81,7 @@ def extract_csv(csv_path: Path = SOCIALINDEX_CSV_PATH) -> pd.DataFrame:
     df = df[list(SOCIALINDEX_COLUMNS)]
 
     if df.empty:
-        raise RuntimeError(f"No school rows could be extracted from {csv_path}")
+        raise RuntimeError(f"No school rows could be extracted from {source}")
 
     df = df.drop_duplicates(subset=["schulnummer"]).reset_index(drop=True)
 
@@ -187,7 +179,7 @@ def main() -> None:
     parser.add_argument(
         "--csv",
         type=Path,
-        help="Source CSV path. If omitted, the configured CSV URL is downloaded.",
+        help="Optional local source CSV path. If omitted, --csv-url is read directly.",
     )
     parser.add_argument("--db", type=Path, default=DB_PATH, help="Target DuckDB path")
     parser.add_argument(
@@ -202,8 +194,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    csv_path = args.csv if args.csv is not None else download_csv(args.csv_url)
-    df = enrich_with_geodata(extract_csv(csv_path), args.school_base_data_url)
+    source = args.csv if args.csv is not None else args.csv_url
+    df = enrich_with_geodata(extract_csv(source), args.school_base_data_url)
     write_schulen(df, args.db, imported_at=datetime.now(timezone.utc))
     print(f"Wrote {len(df):,} schools to {args.db}")
 
