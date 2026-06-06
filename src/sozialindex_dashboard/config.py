@@ -7,9 +7,9 @@ import tomllib
 from sozialindex_dashboard.db import ROOT_DIR
 
 CONFIG_PATH = ROOT_DIR / "config.toml"
-DEFAULT_SOCIALINDEX_PDF_URL = (
+DEFAULT_SOCIALINDEX_CSV_URL = (
     "https://www.schulministerium.nrw/system/files/media/document/file/"
-    "sozialindex_schulliste_schuljahr_2025-26.pdf"
+    "schulliste_sj_25_26_open_data.csv"
 )
 DEFAULT_SCHOOL_BASE_DATA_URL = (
     "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"
@@ -18,14 +18,14 @@ DEFAULT_SCHOOL_BASE_DATA_URL = (
 
 @dataclass(frozen=True)
 class SourceConfig:
-    socialindex_pdf_url: str
+    socialindex_csv_url: str
     school_base_data_url: str
 
 
 def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
     if not config_path.exists():
         return SourceConfig(
-            socialindex_pdf_url=DEFAULT_SOCIALINDEX_PDF_URL,
+            socialindex_csv_url=DEFAULT_SOCIALINDEX_CSV_URL,
             school_base_data_url=DEFAULT_SCHOOL_BASE_DATA_URL,
         )
 
@@ -33,16 +33,16 @@ def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
         config = tomllib.load(file)
 
     sources = config.get("sources", {})
-    socialindex_pdf_url = sources.get(
-        "socialindex_pdf_url", DEFAULT_SOCIALINDEX_PDF_URL
+    socialindex_csv_url = sources.get(
+        "socialindex_csv_url", DEFAULT_SOCIALINDEX_CSV_URL
     )
     school_base_data_url = sources.get(
         "school_base_data_url", DEFAULT_SCHOOL_BASE_DATA_URL
     )
 
-    if not isinstance(socialindex_pdf_url, str) or not socialindex_pdf_url.strip():
+    if not isinstance(socialindex_csv_url, str) or not socialindex_csv_url.strip():
         raise RuntimeError(
-            "config.toml sources.socialindex_pdf_url must be a non-empty string."
+            "config.toml sources.socialindex_csv_url must be a non-empty string."
         )
     if not isinstance(school_base_data_url, str) or not school_base_data_url.strip():
         raise RuntimeError(
@@ -50,6 +50,6 @@ def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
         )
 
     return SourceConfig(
-        socialindex_pdf_url=socialindex_pdf_url.strip(),
+        socialindex_csv_url=socialindex_csv_url.strip(),
         school_base_data_url=school_base_data_url.strip(),
     )

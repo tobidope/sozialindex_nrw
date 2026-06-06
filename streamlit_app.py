@@ -296,7 +296,7 @@ st.caption("Schuljahr 2025/2026")
 if not DB_PATH.exists():
     st.warning(
         "Noch keine Datenbank gefunden. Führe zuerst "
-        "`uv run python -m sozialindex_dashboard.extract_pdf` aus."
+        "`uv run python -m sozialindex_dashboard.extract_csv` aus."
     )
     st.stop()
 
@@ -579,7 +579,7 @@ st.markdown(
 Die dargestellten Daten basieren auf Open Data des Ministeriums für Schule und Bildung
 des Landes Nordrhein-Westfalen.
 
-- Sozialindex-Schulliste 2025/26: [PDF]({source_config.socialindex_pdf_url})
+- Sozialindex-Schulliste 2025/26: [CSV]({source_config.socialindex_csv_url})
 - Schulgrunddaten NRW: [CSV]({source_config.school_base_data_url})
 - Datenstand: {imported_at.astimezone().strftime("%d.%m.%Y, %H:%M Uhr") if imported_at else "unbekannt"}
 - Lizenz: [Datenlizenz Deutschland – Namensnennung – Version 2.0](https://www.govdata.de/dl-de/by-2-0)

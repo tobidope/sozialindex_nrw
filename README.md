@@ -14,17 +14,17 @@ Die Datenquellen sind in `config.toml` konfigurierbar:
 
 ```toml
 [sources]
-socialindex_pdf_url = "https://www.schulministerium.nrw/system/files/media/document/file/sozialindex_schulliste_schuljahr_2025-26.pdf"
+socialindex_csv_url = "https://www.schulministerium.nrw/system/files/media/document/file/schulliste_sj_25_26_open_data.csv"
 school_base_data_url = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"
 ```
 
 Import nach DuckDB:
 
 ```bash
-uv run python -m sozialindex_dashboard.extract_pdf
+uv run python -m sozialindex_dashboard.extract_csv
 ```
 
-Der Import laedt die Sozialindex-PDF aus der konfigurierten URL, extrahiert die
+Der Import laedt die Sozialindex-CSV aus der konfigurierten URL, extrahiert die
 Sozialindexdaten und reichert sie mit den offiziellen NRW-Schulgrunddaten an.
 
 Die Datenbank wird unter `data/sozialindex.duckdb` erstellt. Die Schulgrunddaten

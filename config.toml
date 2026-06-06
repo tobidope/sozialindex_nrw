@@ -1,3 +1,3 @@
 [sources]
-socialindex_pdf_url = "https://www.schulministerium.nrw/system/files/media/document/file/sozialindex_schulliste_schuljahr_2025-26.pdf"
+socialindex_csv_url = "https://www.schulministerium.nrw/system/files/media/document/file/schulliste_sj_25_26_open_data.csv"
 school_base_data_url = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"

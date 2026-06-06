@@ -2,7 +2,33 @@ from __future__ import annotations
 
 import pandas as pd
 
-from sozialindex_dashboard.extract_pdf import _read_school_base_data
+from sozialindex_dashboard.extract_csv import _read_school_base_data, extract_csv
+
+
+def test_extract_csv_reads_cp850_and_skips_rows_without_index(tmp_path):
+    csv_path = tmp_path / "schulliste.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "Schulnummer;Kurzbezeichnung;Bezirksregierung;Kreis;Gemeinde;Sozialindexstufe",
+                "100011;Haan, GE Walder Straße;BR Düsseldorf;Kreis Mettmann;Haan;4",
+                "100218;Köln, GG Friedrich-Karl-Straße;BR Köln;Stadt Köln;Köln;ohne",
+            ]
+        ),
+        encoding="cp850",
+    )
+
+    result = extract_csv(csv_path)
+
+    assert result.to_dict("records") == [
+        {
+            "bezirksregierung": "BR Düsseldorf",
+            "kreis_kreisfreie_stadt": "Kreis Mettmann",
+            "schulnummer": 100011,
+            "schulname": "Haan, GE Walder Straße",
+            "sozialindexstufe": 4,
+        }
+    ]
 
 
 def test_school_base_data_coordinates_are_validated_and_stored_as_floats(tmp_path):

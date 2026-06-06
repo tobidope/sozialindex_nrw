@@ -2,39 +2,30 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
-import re
 from pathlib import Path
-from typing import Iterable, TypedDict, cast
 from urllib.request import urlretrieve
 
 import pandas as pd
-import pdfplumber
-from pdfplumber.page import Page
 from pyproj import Transformer
 
 from sozialindex_dashboard.config import load_source_config
 from sozialindex_dashboard.db import COLUMNS, DATA_DIR, DB_PATH, write_schulen
 
-type ExtractedRow = dict[str, str | int]
-
-
-class PdfWord(TypedDict):
-    text: str
-    x0: float
-    top: float
-
-
-PDF_PATH: Path = DATA_DIR / "sozialindex_schulliste_schuljahr_2025-26.pdf"
+SOCIALINDEX_CSV_PATH: Path = DATA_DIR / "schulliste_sj_25_26_open_data.csv"
 SOCIALINDEX_COLUMNS: tuple[str, ...] = (
     "bezirksregierung",
     "kreis_kreisfreie_stadt",
-    "schulform",
     "schulnummer",
     "schulname",
     "sozialindexstufe",
 )
-SCHOOL_NUMBER_RE = re.compile(r"^\d{6}$")
-INDEX_RE = re.compile(r"^\d+$")
+SOCIALINDEX_COLUMN_MAP: dict[str, str] = {
+    "Schulnummer": "schulnummer",
+    "Kurzbezeichnung": "schulname",
+    "Bezirksregierung": "bezirksregierung",
+    "Kreis": "kreis_kreisfreie_stadt",
+    "Sozialindexstufe": "sozialindexstufe",
+}
 UTM32_TO_WGS84 = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
 NRW_LATITUDE_RANGE = (50.0, 53.0)
 NRW_LONGITUDE_RANGE = (5.0, 10.0)
@@ -66,98 +57,22 @@ SCHOOL_BASE_COLUMN_MAP: dict[str, str] = {
 }
 
 
-def download_pdf(url: str, target_path: Path = PDF_PATH) -> Path:
+def download_csv(url: str, target_path: Path = SOCIALINDEX_CSV_PATH) -> Path:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     urlretrieve(url, target_path)
     return target_path
 
 
-def _join_words(words: Iterable[PdfWord]) -> str:
-    return " ".join(
-        word["text"] for word in sorted(words, key=lambda item: item["x0"])
-    ).strip()
+def extract_csv(csv_path: Path = SOCIALINDEX_CSV_PATH) -> pd.DataFrame:
+    raw_df = pd.read_csv(csv_path, sep=";", encoding="cp850", dtype="string")
+    missing_columns = sorted(set(SOCIALINDEX_COLUMN_MAP) - set(raw_df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "The socialindex CSV is missing required columns: "
+            + ", ".join(missing_columns)
+        )
 
-
-def _line_key(word: PdfWord) -> int:
-    return round(float(word["top"]))
-
-
-def _extract_line_rows(page: Page) -> list[ExtractedRow]:
-    words = cast(
-        list[PdfWord],
-        [
-            word
-            for word in page.extract_words(x_tolerance=1, y_tolerance=3)
-            if 92 <= float(word["top"]) <= page.height - 35
-        ],
-    )
-    grouped: dict[int, list[PdfWord]] = {}
-    for word in words:
-        grouped.setdefault(_line_key(word), []).append(word)
-
-    rows: list[ExtractedRow] = []
-    for line_words in grouped.values():
-        text = _join_words(line_words)
-        if not text or text.startswith(("Bezirksregierung", "Seite ")):
-            continue
-
-        number_words = [
-            word for word in line_words if SCHOOL_NUMBER_RE.match(word["text"])
-        ]
-        index_words = [
-            word
-            for word in line_words
-            if INDEX_RE.match(word["text"]) and float(word["x0"]) >= 470
-        ]
-        if not number_words or not index_words:
-            continue
-
-        number_word = min(number_words, key=lambda word: abs(float(word["x0"]) - 300))
-        index_word = max(index_words, key=lambda word: float(word["x0"]))
-
-        row: ExtractedRow = {
-            "bezirksregierung": _join_words(
-                word for word in line_words if 70 <= float(word["x0"]) < 130
-            ),
-            "kreis_kreisfreie_stadt": _join_words(
-                word for word in line_words if 130 <= float(word["x0"]) < 215
-            ),
-            "schulform": _join_words(
-                word for word in line_words if 215 <= float(word["x0"]) < 290
-            ),
-            "schulnummer": int(number_word["text"]),
-            "schulname": _join_words(
-                word for word in line_words if 330 <= float(word["x0"]) < 470
-            ),
-            "sozialindexstufe": int(index_word["text"]),
-        }
-        rows.append(row)
-
-    return rows
-
-
-def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
-    current = {
-        "bezirksregierung": "",
-        "kreis_kreisfreie_stadt": "",
-        "schulform": "",
-    }
-    records: list[ExtractedRow] = []
-
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            for row in _extract_line_rows(page):
-                for column in current:
-                    value = str(row[column]).strip()
-                    if value:
-                        current[column] = value
-                    row[column] = current[column]
-                records.append(row)
-
-    df = pd.DataFrame.from_records(records, columns=SOCIALINDEX_COLUMNS)
-    if df.empty:
-        raise RuntimeError(f"No school rows could be extracted from {pdf_path}")
-
+    df = raw_df[list(SOCIALINDEX_COLUMN_MAP)].rename(columns=SOCIALINDEX_COLUMN_MAP)
     df["schulnummer"] = pd.to_numeric(df["schulnummer"], errors="raise").astype("int64")
     df["schulname"] = (
         df["schulname"]
@@ -165,19 +80,25 @@ def extract_pdf(pdf_path: Path = PDF_PATH) -> pd.DataFrame:
         .str.replace(r"\s+", " ", regex=True)
         .str.strip()
     )
-    df["sozialindexstufe"] = pd.to_numeric(
-        df["sozialindexstufe"], errors="raise"
-    ).astype("int64")
+    for column in ["bezirksregierung", "kreis_kreisfreie_stadt"]:
+        df[column] = df[column].astype("string").str.strip()
+
+    df["sozialindexstufe"] = pd.to_numeric(df["sozialindexstufe"], errors="coerce")
     df = df.dropna(subset=["schulnummer", "schulname", "sozialindexstufe"])
+    df["sozialindexstufe"] = df["sozialindexstufe"].astype("int64")
+    df = df[list(SOCIALINDEX_COLUMNS)]
+
+    if df.empty:
+        raise RuntimeError(f"No school rows could be extracted from {csv_path}")
+
     df = df.drop_duplicates(subset=["schulnummer"]).reset_index(drop=True)
 
     missing_group_values = df[
         (df["bezirksregierung"] == "")
         | (df["kreis_kreisfreie_stadt"] == "")
-        | (df["schulform"] == "")
     ]
     if not missing_group_values.empty:
-        raise RuntimeError("Some rows are missing grouped values after forward-fill.")
+        raise RuntimeError("Some rows are missing required group values.")
 
     return df
 
@@ -251,6 +172,7 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
 def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:
     base_df = _read_school_base_data(url)
     enriched_df = socialindex_df.merge(base_df, on="schulnummer", how="left")
+    enriched_df["schulform"] = enriched_df["schuldaten_schulform"]
     has_coordinates = enriched_df["latitude"].notna() & enriched_df["longitude"].notna()
     enriched_df["geo_match_status"] = "missing_location"
     enriched_df.loc[has_coordinates, "geo_match_status"] = "matched"
@@ -263,15 +185,15 @@ def main() -> None:
         description="Extract NRW Sozialindex school data into DuckDB."
     )
     parser.add_argument(
-        "--pdf",
+        "--csv",
         type=Path,
-        help="Source PDF path. If omitted, the configured PDF URL is downloaded.",
+        help="Source CSV path. If omitted, the configured CSV URL is downloaded.",
     )
     parser.add_argument("--db", type=Path, default=DB_PATH, help="Target DuckDB path")
     parser.add_argument(
-        "--pdf-url",
-        default=source_config.socialindex_pdf_url,
-        help="Socialindex school list PDF URL",
+        "--csv-url",
+        default=source_config.socialindex_csv_url,
+        help="Socialindex school list CSV URL",
     )
     parser.add_argument(
         "--school-base-data-url",
@@ -280,8 +202,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    pdf_path = args.pdf if args.pdf is not None else download_pdf(args.pdf_url)
-    df = enrich_with_geodata(extract_pdf(pdf_path), args.school_base_data_url)
+    csv_path = args.csv if args.csv is not None else download_csv(args.csv_url)
+    df = enrich_with_geodata(extract_csv(csv_path), args.school_base_data_url)
     write_schulen(df, args.db, imported_at=datetime.now(timezone.utc))
     print(f"Wrote {len(df):,} schools to {args.db}")
 
