@@ -56,10 +56,6 @@ FILTER_OPTION_COLUMNS = [
 ]
 
 
-def _placeholders(values: list[Any]) -> str:
-    return ", ".join("?" for _ in values)
-
-
 def _distance_expression() -> str:
     """Return a SQL Haversine expression for distance in kilometers.
 
@@ -118,17 +114,17 @@ def _build_filtered_query(
         params.append(query)
 
     if bezirksregierungen:
-        clauses.append(f"bezirksregierung IN ({_placeholders(bezirksregierungen)})")
-        params.extend(bezirksregierungen)
+        clauses.append("bezirksregierung IN ?")
+        params.append(bezirksregierungen)
     if kreise:
-        clauses.append(f"kreis_kreisfreie_stadt IN ({_placeholders(kreise)})")
-        params.extend(kreise)
+        clauses.append("kreis_kreisfreie_stadt IN ?")
+        params.append(kreise)
     if schulformen:
-        clauses.append(f"schulform IN ({_placeholders(schulformen)})")
-        params.extend(schulformen)
+        clauses.append("schulform IN ?")
+        params.append(schulformen)
     if sozialindexstufen:
-        clauses.append(f"sozialindexstufe IN ({_placeholders(sozialindexstufen)})")
-        params.extend(sozialindexstufen)
+        clauses.append("sozialindexstufe IN ?")
+        params.append(sozialindexstufen)
 
     if distance_expr is not None and radius_km is not None:
         clauses.append("latitude IS NOT NULL AND longitude IS NOT NULL")
