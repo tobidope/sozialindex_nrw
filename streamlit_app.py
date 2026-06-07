@@ -280,7 +280,7 @@ def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
     if include_distance and "entfernung_km" in df.columns:
         list_df["Entfernung"] = df["entfernung_km"]
         return list_df.sort_values(
-            ["Sozialindex", "Entfernung"], ascending=[True, True]
+            ["Entfernung", "Sozialindex"], ascending=[True, True]
         )
     return list_df.sort_values("Sozialindex", ascending=True)
 
