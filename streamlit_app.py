@@ -355,20 +355,6 @@ with st.sidebar:
         key="suche",
         bind="query-params",
     )
-    selected_bezirksregierungen = st.multiselect(
-        "Bezirksregierung",
-        filter_options["bezirksregierung"],
-        placeholder="Bezirksregierung auswählen",
-        key="bezirksregierungen",
-        bind="query-params",
-    )
-    selected_kreise = st.multiselect(
-        "Kreis / Kreisfreie Stadt",
-        filter_options["kreis_kreisfreie_stadt"],
-        placeholder="Kreis oder Stadt auswählen",
-        key="kreis_stadt",
-        bind="query-params",
-    )
     selected_schulformen = st.multiselect(
         "Schulform",
         filter_options["schulform"],
@@ -381,6 +367,20 @@ with st.sidebar:
         filter_options["sozialindexstufe"],
         placeholder="Sozialindexstufe auswählen",
         key="sozialindexstufen",
+        bind="query-params",
+    )
+    selected_kreise = st.multiselect(
+        "Kreis / Kreisfreie Stadt",
+        filter_options["kreis_kreisfreie_stadt"],
+        placeholder="Kreis oder Stadt auswählen",
+        key="kreis_stadt",
+        bind="query-params",
+    )
+    selected_bezirksregierungen = st.multiselect(
+        "Bezirksregierung",
+        filter_options["bezirksregierung"],
+        placeholder="Bezirksregierung auswählen",
+        key="bezirksregierungen",
         bind="query-params",
     )
 
