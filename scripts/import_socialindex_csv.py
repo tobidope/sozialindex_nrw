@@ -53,6 +53,15 @@ SCHOOL_BASE_COLUMN_MAP: dict[str, str] = {
     "UTMRechtswert": "utm_rechtswert",
     "UTMHochwert": "utm_hochwert",
 }
+SCHOOL_FORM_LABELS: dict[str, str] = {
+    "02": "Grundschule",
+    "04": "Hauptschule",
+    "10": "Realschule",
+    "13": "PRIMUS-Schule",
+    "14": "Sekundarschule",
+    "15": "Gesamtschule",
+    "20": "Gymnasium",
+}
 
 
 def extract_csv(source: str | Path) -> pd.DataFrame:
@@ -86,8 +95,7 @@ def extract_csv(source: str | Path) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["schulnummer"]).reset_index(drop=True)
 
     missing_group_values = df[
-        (df["bezirksregierung"] == "")
-        | (df["kreis_kreisfreie_stadt"] == "")
+        (df["bezirksregierung"] == "") | (df["kreis_kreisfreie_stadt"] == "")
     ]
     if not missing_group_values.empty:
         raise RuntimeError("Some rows are missing required group values.")
@@ -113,6 +121,7 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
         encoding="utf-8",
         skiprows=1,
         dtype={
+            "Schulform": "string",
             "PLZ": "string",
             "Telefonvorwahl": "string",
             "Telefon": "string",
@@ -164,7 +173,12 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
 def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:
     base_df = _read_school_base_data(url)
     enriched_df = socialindex_df.merge(base_df, on="schulnummer", how="left")
-    enriched_df["schulform"] = enriched_df["schuldaten_schulform"]
+    school_form_codes = (
+        enriched_df["schuldaten_schulform"].astype("string").str.zfill(2)
+    )
+    enriched_df["schulform"] = school_form_codes.map(SCHOOL_FORM_LABELS).fillna(
+        school_form_codes
+    )
     has_coordinates = enriched_df["latitude"].notna() & enriched_df["longitude"].notna()
     enriched_df["geo_match_status"] = "missing_location"
     enriched_df.loc[has_coordinates, "geo_match_status"] = "matched"

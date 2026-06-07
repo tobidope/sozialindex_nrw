@@ -158,7 +158,9 @@ def test_radius_filter_returns_only_nearby_schools_with_distance(db_path):
 
     assert result["schulnummer"].tolist() == [100001, 100003]
     assert "entfernung_km" in result.columns
-    assert result.loc[result["schulnummer"] == 100001, "entfernung_km"].iloc[0] == pytest.approx(0)
+    assert result.loc[result["schulnummer"] == 100001, "entfernung_km"].iloc[
+        0
+    ] == pytest.approx(0)
     assert result["entfernung_km"].is_monotonic_increasing
 
 
@@ -186,7 +188,13 @@ def test_summary_and_chart_counts_use_same_filtered_dataset(db_path):
         "durchschnitt_sozialindex": 5.0,
         "mit_koordinaten": 2,
     }
-    assert dict(zip(index_counts["sozialindexstufe"], index_counts["Anzahl Schulen"], strict=True)) == {
+    assert dict(
+        zip(
+            index_counts["sozialindexstufe"],
+            index_counts["Anzahl Schulen"],
+            strict=True,
+        )
+    ) == {
         2: 1,
         8: 1,
     }

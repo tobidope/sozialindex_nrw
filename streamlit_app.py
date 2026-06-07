@@ -384,7 +384,9 @@ active_radius_km = radius_km if origin_available else None
 selected_bezirksregierungen_tuple = tuple(selected_bezirksregierungen)
 selected_kreise_tuple = tuple(selected_kreise)
 selected_schulformen_tuple = tuple(selected_schulformen)
-selected_sozialindexstufen_tuple = tuple(int(value) for value in selected_sozialindexstufen)
+selected_sozialindexstufen_tuple = tuple(
+    int(value) for value in selected_sozialindexstufen
+)
 
 result_df = load_schools(
     db_mtime,

@@ -5,13 +5,16 @@ from pathlib import Path
 
 import pandas as pd
 
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "import_socialindex_csv.py"
+SCRIPT_PATH = (
+    Path(__file__).resolve().parents[1] / "scripts" / "import_socialindex_csv.py"
+)
 spec = importlib.util.spec_from_file_location("import_socialindex_csv", SCRIPT_PATH)
 assert spec is not None
 assert spec.loader is not None
 import_socialindex_csv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(import_socialindex_csv)
 
+enrich_with_geodata = import_socialindex_csv.enrich_with_geodata
 _read_school_base_data = import_socialindex_csv._read_school_base_data
 extract_csv = import_socialindex_csv.extract_csv
 
@@ -79,3 +82,44 @@ def test_school_base_data_coordinates_are_validated_and_stored_as_floats(tmp_pat
     assert result.loc[result["schulnummer"] == 100001, "longitude"].notna().all()
     assert result.loc[result["schulnummer"] == 100002, "latitude"].isna().all()
     assert result.loc[result["schulnummer"] == 100002, "longitude"].isna().all()
+
+
+def test_enrich_with_geodata_maps_school_form_codes_to_labels(tmp_path):
+    base_data_path = tmp_path / "schuldaten.csv"
+    base_data_path.write_text(
+        "\n".join(
+            [
+                "metadata row skipped by import",
+                (
+                    "Schulnummer;Schulform;Schulbezeichnung_1;Schulbezeichnung_2;"
+                    "Schulbezeichnung_3;Kurzbezeichnung;Bezirksregierung;PLZ;Ort;"
+                    "Strasse;Telefonvorwahl;Telefon;Faxvorwahl;Fax;E-Mail;Homepage;"
+                    "Rechtsform;Traegernummer;Gemeindeschluessel;"
+                    "Schulbetriebsschluessel;Schulbetriebsdatum;EPSG;UTMRechtswert;"
+                    "UTMHochwert"
+                ),
+                (
+                    "100001;02;Schule A;;;Schule A;Koeln;50000;Koeln;"
+                    "Str. 1;0221;123;;;a@example.test;https://a.example.test;"
+                    "1;10;1000;1;01.01.2020;EPSG:25832;350000;5650000"
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    socialindex_df = pd.DataFrame(
+        [
+            {
+                "bezirksregierung": "BR Koeln",
+                "kreis_kreisfreie_stadt": "Stadt Koeln",
+                "schulnummer": 100001,
+                "schulname": "Koeln, GG Schule A",
+                "sozialindexstufe": 3,
+            }
+        ]
+    )
+
+    result = enrich_with_geodata(socialindex_df, str(base_data_path))
+
+    assert result.loc[0, "schulform"] == "Grundschule"
+    assert result.loc[0, "schuldaten_schulform"] == "02"
