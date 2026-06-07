@@ -16,6 +16,7 @@ spec.loader.exec_module(import_socialindex_csv)
 
 enrich_with_geodata = import_socialindex_csv.enrich_with_geodata
 _read_school_base_data = import_socialindex_csv._read_school_base_data
+_read_student_counts = import_socialindex_csv._read_student_counts
 extract_csv = import_socialindex_csv.extract_csv
 
 
@@ -86,6 +87,7 @@ def test_school_base_data_coordinates_are_validated_and_stored_as_floats(tmp_pat
 
 def test_enrich_with_geodata_maps_school_form_codes_to_labels(tmp_path):
     base_data_path = tmp_path / "schuldaten.csv"
+    student_counts_path = tmp_path / "schueler.csv"
     base_data_path.write_text(
         "\n".join(
             [
@@ -107,6 +109,15 @@ def test_enrich_with_geodata_maps_school_form_codes_to_labels(tmp_path):
         ),
         encoding="utf-8",
     )
+    student_counts_path.write_text(
+        "\n".join(
+            [
+                "Schulnummer;Anzahl",
+                "100001;321",
+            ]
+        ),
+        encoding="utf-8",
+    )
     socialindex_df = pd.DataFrame(
         [
             {
@@ -119,7 +130,31 @@ def test_enrich_with_geodata_maps_school_form_codes_to_labels(tmp_path):
         ]
     )
 
-    result = enrich_with_geodata(socialindex_df, str(base_data_path))
+    result = enrich_with_geodata(
+        socialindex_df, str(base_data_path), str(student_counts_path)
+    )
 
     assert result.loc[0, "schulform"] == "Grundschule"
     assert result.loc[0, "schuldaten_schulform"] == "02"
+    assert result.loc[0, "anzahl_schueler"] == 321
+
+
+def test_student_counts_are_read_by_school_number(tmp_path):
+    csv_path = tmp_path / "schueler.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "Schulnummer;Anzahl",
+                "100001;321",
+                "100002;",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = _read_student_counts(str(csv_path))
+
+    assert result.to_dict("records") == [
+        {"schulnummer": 100001, "anzahl_schueler": 321},
+        {"schulnummer": 100002, "anzahl_schueler": None},
+    ]

@@ -197,6 +197,8 @@ def render_socialindex_legend() -> None:
         <div class="map-legend">
             <span class="legend-title">Sozialindexstufe</span>
             {"".join(items)}
+            <span class="legend-title">Tooltip</span>
+            <span>Anzahl Schülerinnen und Schüler je Schule</span>
         </div>
         """
     )
@@ -250,6 +252,12 @@ def google_maps_search_link(row: pd.Series) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={quote_plus(query)}"
 
 
+def format_student_count(value) -> str:
+    if pd.isna(value):
+        return "-"
+    return f"{int(value):,}".replace(",", ".")
+
+
 def school_homepage_link(row: pd.Series) -> str | None:
     homepage = str(row.get("homepage") or "").strip()
     if not homepage or homepage == "<NA>":
@@ -273,6 +281,7 @@ def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
             "Schule": df.apply(school_homepage_display_link, axis=1),
             "Schulform": df["schulform"],
             "Sozialindex": df["sozialindexstufe"],
+            "Schüler": df["anzahl_schueler"],
             "Adresse": df.apply(format_address, axis=1),
             "Link": df.apply(google_maps_search_link, axis=1),
         }
@@ -477,6 +486,9 @@ with st.container(border=True):
         map_df["entfernung_karte"] = map_df["entfernung_km"].map(
             lambda value: f"{value:.1f}"
         )
+        map_df["anzahl_schueler_karte"] = map_df["anzahl_schueler"].map(
+            format_student_count
+        )
         view_state = pdk.ViewState(
             latitude=float(manual_latitude),
             longitude=float(manual_longitude),
@@ -520,6 +532,7 @@ with st.container(border=True):
                         "Schulnummer: {schulnummer}<br/>"
                         "{schulform}, {ort}<br/>"
                         "Sozialindexstufe: {sozialindexstufe}<br/>"
+                        "Schülerinnen und Schüler: {anzahl_schueler_karte}<br/>"
                         "Entfernung: {entfernung_karte} km"
                     ),
                     "style": {"backgroundColor": "#17211F", "color": "white"},
@@ -570,6 +583,11 @@ with st.container(border=True):
                 format="%d",
                 help="Sozialindexstufe von 1 (niedrig) bis 9 (hoch)",
             ),
+            "Schüler": st.column_config.NumberColumn(
+                "Schüler",
+                format="%d",
+                help="Gesamtanzahl der Schülerinnen und Schüler je Schule",
+            ),
             "Link": st.column_config.LinkColumn(
                 "Link",
                 display_text="Google Maps",
@@ -590,6 +608,7 @@ des Landes Nordrhein-Westfalen.
 
 - Sozialindex-Schulliste 2025/26: [CSV]({source_config.socialindex_csv_url})
 - Schulgrunddaten NRW: [CSV]({source_config.school_base_data_url})
+- Anzahl Schülerinnen und Schüler je Schule: [CSV]({source_config.student_counts_csv_url})
 - Datenstand: {imported_at.astimezone().strftime("%d.%m.%Y, %H:%M Uhr") if imported_at else "unbekannt"}
 - Lizenz: [Datenlizenz Deutschland – Namensnennung – Version 2.0](https://www.govdata.de/dl-de/by-2-0)
 

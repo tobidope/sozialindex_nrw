@@ -62,6 +62,10 @@ SCHOOL_FORM_LABELS: dict[str, str] = {
     "15": "Gesamtschule",
     "20": "Gymnasium",
 }
+STUDENT_COUNTS_COLUMN_MAP: dict[str, str] = {
+    "Schulnummer": "schulnummer",
+    "Anzahl": "anzahl_schueler",
+}
 
 
 def extract_csv(source: str | Path) -> pd.DataFrame:
@@ -170,9 +174,32 @@ def _read_school_base_data(url: str) -> pd.DataFrame:
     return _normalize_coordinates(df)
 
 
-def enrich_with_geodata(socialindex_df: pd.DataFrame, url: str) -> pd.DataFrame:
-    base_df = _read_school_base_data(url)
+def _read_student_counts(url: str) -> pd.DataFrame:
+    raw_df = pd.read_csv(url, sep=";", dtype="string")
+    missing_columns = sorted(set(STUDENT_COUNTS_COLUMN_MAP) - set(raw_df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "The student counts CSV is missing required columns: "
+            + ", ".join(missing_columns)
+        )
+
+    df = raw_df[list(STUDENT_COUNTS_COLUMN_MAP)].rename(
+        columns=STUDENT_COUNTS_COLUMN_MAP
+    )
+    df["schulnummer"] = pd.to_numeric(df["schulnummer"], errors="raise").astype("int64")
+    df["anzahl_schueler"] = pd.to_numeric(df["anzahl_schueler"], errors="coerce")
+    df = df.dropna(subset=["schulnummer"]).drop_duplicates(subset=["schulnummer"])
+    df["anzahl_schueler"] = df["anzahl_schueler"].astype("Int64")
+    return df
+
+
+def enrich_with_geodata(
+    socialindex_df: pd.DataFrame, school_base_data_url: str, student_counts_url: str
+) -> pd.DataFrame:
+    base_df = _read_school_base_data(school_base_data_url)
+    student_counts_df = _read_student_counts(student_counts_url)
     enriched_df = socialindex_df.merge(base_df, on="schulnummer", how="left")
+    enriched_df = enriched_df.merge(student_counts_df, on="schulnummer", how="left")
     school_form_codes = (
         enriched_df["schuldaten_schulform"].astype("string").str.zfill(2)
     )
@@ -206,10 +233,17 @@ def main() -> None:
         default=source_config.school_base_data_url,
         help="Official NRW school base data CSV URL",
     )
+    parser.add_argument(
+        "--student-counts-url",
+        default=source_config.student_counts_csv_url,
+        help="CSV URL with total student counts per school",
+    )
     args = parser.parse_args()
 
     source = args.csv if args.csv is not None else args.csv_url
-    df = enrich_with_geodata(extract_csv(source), args.school_base_data_url)
+    df = enrich_with_geodata(
+        extract_csv(source), args.school_base_data_url, args.student_counts_url
+    )
     write_schulen(df, args.db, imported_at=datetime.now(timezone.utc))
     print(f"Wrote {len(df):,} schools to {args.db}")
 

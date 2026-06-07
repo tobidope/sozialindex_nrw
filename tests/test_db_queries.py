@@ -25,6 +25,7 @@ def _row(**overrides):
         "schulnummer": 100001,
         "schulname": "Stadt A, GG Alte Schule",
         "sozialindexstufe": 2,
+        "anzahl_schueler": 240,
         "strasse": "Schulstr. 1",
         "plz": "50000",
         "ort": "Stadt A",

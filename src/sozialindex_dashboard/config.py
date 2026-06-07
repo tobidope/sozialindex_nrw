@@ -14,12 +14,18 @@ DEFAULT_SOCIALINDEX_CSV_URL = (
 DEFAULT_SCHOOL_BASE_DATA_URL = (
     "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"
 )
+DEFAULT_STUDENT_COUNTS_CSV_URL = (
+    "https://opendata.rhein-kreis-neuss.de/api/v2/catalog/datasets/"
+    "gesamtanzahl-der-schulerinnen-und-schuler-je-schule-in-nrw/exports/csv"
+    "?use_labels=true"
+)
 
 
 @dataclass(frozen=True)
 class SourceConfig:
     socialindex_csv_url: str
     school_base_data_url: str
+    student_counts_csv_url: str
 
 
 def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
@@ -27,6 +33,7 @@ def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
         return SourceConfig(
             socialindex_csv_url=DEFAULT_SOCIALINDEX_CSV_URL,
             school_base_data_url=DEFAULT_SCHOOL_BASE_DATA_URL,
+            student_counts_csv_url=DEFAULT_STUDENT_COUNTS_CSV_URL,
         )
 
     with config_path.open("rb") as file:
@@ -39,6 +46,9 @@ def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
     school_base_data_url = sources.get(
         "school_base_data_url", DEFAULT_SCHOOL_BASE_DATA_URL
     )
+    student_counts_csv_url = sources.get(
+        "student_counts_csv_url", DEFAULT_STUDENT_COUNTS_CSV_URL
+    )
 
     if not isinstance(socialindex_csv_url, str) or not socialindex_csv_url.strip():
         raise RuntimeError(
@@ -48,8 +58,13 @@ def load_source_config(config_path: Path = CONFIG_PATH) -> SourceConfig:
         raise RuntimeError(
             "config.toml sources.school_base_data_url must be a non-empty string."
         )
+    if not isinstance(student_counts_csv_url, str) or not student_counts_csv_url.strip():
+        raise RuntimeError(
+            "config.toml sources.student_counts_csv_url must be a non-empty string."
+        )
 
     return SourceConfig(
         socialindex_csv_url=socialindex_csv_url.strip(),
         school_base_data_url=school_base_data_url.strip(),
+        student_counts_csv_url=student_counts_csv_url.strip(),
     )

@@ -1,3 +1,4 @@
 [sources]
 socialindex_csv_url = "https://www.schulministerium.nrw/system/files/media/document/file/schulliste_sj_25_26_open_data.csv"
 school_base_data_url = "https://www.schulministerium.nrw.de/BiPo/OpenData/Schuldaten/schuldaten.csv"
+student_counts_csv_url = "https://opendata.rhein-kreis-neuss.de/api/v2/catalog/datasets/gesamtanzahl-der-schulerinnen-und-schuler-je-schule-in-nrw/exports/csv?use_labels=true"
