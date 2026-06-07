@@ -310,7 +310,19 @@ with st.sidebar:
         key="radius_km",
         bind="query-params",
     )
-    location_result = browser_geolocation(key="browser_geolocation")
+    st.session_state.setdefault("location_reset_version", 0)
+    if st.button("Standort zurücksetzen", use_container_width=True):
+        st.session_state["latitude"] = None
+        st.session_state["longitude"] = None
+        st.session_state["location_reset_version"] += 1
+        for param in ("latitude", "longitude"):
+            if param in st.query_params:
+                del st.query_params[param]
+        st.rerun()
+
+    location_result = browser_geolocation(
+        key=f"browser_geolocation_{st.session_state['location_reset_version']}"
+    )
     browser_latitude = getattr(location_result, "latitude", None)
     browser_longitude = getattr(location_result, "longitude", None)
     if browser_latitude is not None:
