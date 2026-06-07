@@ -35,7 +35,7 @@ werden.
 ## Dashboard starten
 
 ```bash
-uv run streamlit run src/sozialindex_dashboard/app.py
+uv run streamlit run streamlit_app.py
 ```
 
 Das Dashboard bietet Suche nach Schulname, Schulnummer und Kreis sowie Filter fuer
