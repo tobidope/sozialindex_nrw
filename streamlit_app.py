@@ -315,9 +315,6 @@ with st.sidebar:
         st.session_state["latitude"] = None
         st.session_state["longitude"] = None
         st.session_state["location_reset_version"] += 1
-        for param in ("latitude", "longitude"):
-            if param in st.query_params:
-                del st.query_params[param]
         st.rerun()
 
     location_result = browser_geolocation(
@@ -341,7 +338,6 @@ with st.sidebar:
         value=None,
         format="%.6f",
         key="latitude",
-        bind="query-params",
     )
     manual_longitude = st.number_input(
         "Longitude",
@@ -350,7 +346,6 @@ with st.sidebar:
         value=None,
         format="%.6f",
         key="longitude",
-        bind="query-params",
     )
 
     st.header("Filter")
