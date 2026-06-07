@@ -231,6 +231,40 @@ def read_schulen(db_path: Path = DB_PATH) -> pd.DataFrame:
         ).df()
 
 
+def read_school_by_number(
+    schulnummer: int,
+    *,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    db_path: Path = DB_PATH,
+) -> pd.Series | None:
+    if not db_path.exists():
+        return None
+
+    select_fields = "*"
+    params: list[Any] = []
+    if latitude is not None and longitude is not None:
+        distance_expr = _distance_expression()
+        select_fields = f"*, {distance_expr} AS entfernung_km"
+        params.extend([latitude, latitude, longitude])
+    params.append(schulnummer)
+
+    with connect(db_path, read_only=True) as con:
+        df = con.execute(
+            f"""
+            SELECT {select_fields}
+            FROM {TABLE_NAME}
+            WHERE schulnummer = ?
+            LIMIT 1
+            """,
+            params,
+        ).df()
+
+    if df.empty:
+        return None
+    return df.iloc[0]
+
+
 def read_filter_options(db_path: Path = DB_PATH) -> dict[str, list]:
     if not db_path.exists():
         return {column: [] for column in FILTER_OPTION_COLUMNS}

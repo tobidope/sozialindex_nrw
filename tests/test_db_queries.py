@@ -10,6 +10,7 @@ from sozialindex_dashboard.db import (
     query_schulen,
     read_filter_options,
     read_imported_at,
+    read_school_by_number,
     read_schulform_counts,
     read_sozialindex_counts,
     read_summary,
@@ -142,6 +143,32 @@ def test_query_combines_list_filters(db_path):
     )
 
     assert result["schulnummer"].tolist() == [100001]
+
+
+def test_read_school_by_number_returns_matching_school(db_path):
+    result = read_school_by_number(100002, db_path=db_path)
+
+    assert result is not None
+    assert result["schulnummer"] == 100002
+    assert result["schulname"] == "Stadt A, Gym Weiter Weg"
+    assert "entfernung_km" not in result.index
+
+
+def test_read_school_by_number_can_include_distance(db_path):
+    result = read_school_by_number(
+        100001,
+        latitude=51.0,
+        longitude=7.0,
+        db_path=db_path,
+    )
+
+    assert result is not None
+    assert result["schulnummer"] == 100001
+    assert result["entfernung_km"] == pytest.approx(0)
+
+
+def test_read_school_by_number_returns_none_for_unknown_school(db_path):
+    assert read_school_by_number(999999, db_path=db_path) is None
 
 
 def test_radius_filter_returns_only_nearby_schools_with_distance(db_path):

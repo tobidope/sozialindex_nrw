@@ -12,6 +12,7 @@ from sozialindex_dashboard.db import (
     query_schulen,
     read_filter_options,
     read_imported_at,
+    read_school_by_number,
     read_schulform_counts,
     read_sozialindex_counts,
     read_summary,
@@ -51,6 +52,21 @@ def load_filter_options(db_mtime: float) -> dict[str, list]:
 @st.cache_data(show_spinner=False, max_entries=1)
 def load_imported_at(db_mtime: float):
     return read_imported_at(DB_PATH)
+
+
+@st.cache_data(show_spinner=False, max_entries=100)
+def load_school_detail(
+    db_mtime: float,
+    schulnummer: int,
+    latitude: float | None,
+    longitude: float | None,
+) -> pd.Series | None:
+    return read_school_by_number(
+        schulnummer,
+        latitude=latitude,
+        longitude=longitude,
+        db_path=DB_PATH,
+    )
 
 
 @st.cache_data(show_spinner=False, max_entries=1)
@@ -258,6 +274,27 @@ def format_student_count(value) -> str:
     return f"{int(value):,}".replace(",", ".")
 
 
+def has_value(value) -> bool:
+    if value is None or pd.isna(value):
+        return False
+    text = str(value).strip()
+    return bool(text) and text != "<NA>"
+
+
+def display_value(value) -> str:
+    if not has_value(value):
+        return "-"
+    return str(value).strip()
+
+
+def format_phone(prefix, number) -> str | None:
+    if not has_value(number):
+        return None
+    parts = [display_value(prefix)] if has_value(prefix) else []
+    parts.append(display_value(number))
+    return " ".join(parts)
+
+
 def school_homepage_link(row: pd.Series) -> str | None:
     homepage = str(row.get("homepage") or "").strip()
     if not homepage or homepage == "<NA>":
@@ -267,18 +304,117 @@ def school_homepage_link(row: pd.Series) -> str | None:
     return f"https://{homepage}"
 
 
-def school_homepage_display_link(row: pd.Series) -> str:
+def school_detail_link(row: pd.Series) -> str:
     school_name = school_display_name(row)
-    homepage = school_homepage_link(row)
-    if homepage is None:
-        return f"#schule={school_name}"
-    return f"{homepage}#schule={school_name}"
+    return f"?schule={int(row['schulnummer'])}#schule={school_name}"
+
+
+def mailto_link(email: str | None) -> str | None:
+    if not has_value(email):
+        return None
+    return f"mailto:{display_value(email)}"
+
+
+def render_link_or_text(label: str, value: str | None, url: str | None) -> None:
+    if value is None:
+        return
+    if url:
+        st.markdown(f"**{label}:** [{value}]({url})")
+    else:
+        st.markdown(f"**{label}:** {value}")
+
+
+def render_field_group(fields: list[tuple[str, object]]) -> None:
+    visible_fields = [
+        (label, display_value(value)) for label, value in fields if has_value(value)
+    ]
+    if not visible_fields:
+        st.caption("Keine Daten vorhanden.")
+        return
+
+    for label, value in visible_fields:
+        st.markdown(f"**{label}:** {value}")
+
+
+def render_school_detail(row: pd.Series) -> None:
+    st.link_button("Zur Übersicht", "./", icon=":material/arrow_back:")
+
+    st.title(school_display_name(row))
+    if has_value(row.get("schulname")) and row.get("schulname") != school_display_name(
+        row
+    ):
+        st.caption(display_value(row.get("schulname")))
+
+    with st.container(horizontal=True):
+        st.metric("Schulnummer", display_value(row.get("schulnummer")), border=True)
+        st.metric("Schulform", display_value(row.get("schulform")), border=True)
+        st.metric(
+            "Sozialindexstufe",
+            display_value(row.get("sozialindexstufe")),
+            border=True,
+        )
+        st.metric(
+            "Schülerinnen und Schüler",
+            format_student_count(row.get("anzahl_schueler")),
+            border=True,
+        )
+        if has_value(row.get("entfernung_km")):
+            st.metric(
+                "Entfernung",
+                f"{float(row.get('entfernung_km')):.2f} km",
+                border=True,
+            )
+
+    contact_col, location_col = st.columns(2)
+    with location_col:
+        with st.container(border=True):
+            st.subheader("Standort")
+            render_field_group(
+                [
+                    ("Adresse", format_address(row)),
+                    ("Kreis / Kreisfreie Stadt", row.get("kreis_kreisfreie_stadt")),
+                    ("Bezirksregierung", row.get("bezirksregierung")),
+                ]
+            )
+            st.link_button(
+                "In Google Maps öffnen",
+                google_maps_search_link(row),
+                icon=":material/map:",
+            )
+
+    with contact_col:
+        with st.container(border=True):
+            st.subheader("Kontakt")
+            homepage = school_homepage_link(row)
+            phone = format_phone(row.get("telefonvorwahl"), row.get("telefon"))
+            fax = format_phone(row.get("faxvorwahl"), row.get("fax"))
+            render_link_or_text("Homepage", homepage, homepage)
+            render_link_or_text(
+                "E-Mail",
+                display_value(row.get("email"))
+                if has_value(row.get("email"))
+                else None,
+                mailto_link(row.get("email")),
+            )
+            render_link_or_text("Telefon", phone, None)
+            render_link_or_text("Fax", fax, None)
+
+    with st.container(border=True):
+        st.subheader("Schulprofil")
+        render_field_group(
+            [
+                ("Schulbezeichnung 1", row.get("schulbezeichnung_1")),
+                ("Schulbezeichnung 2", row.get("schulbezeichnung_2")),
+                ("Schulbezeichnung 3", row.get("schulbezeichnung_3")),
+                ("Schulbetriebsdatum", row.get("schulbetriebsdatum")),
+            ]
+        )
 
 
 def build_school_list(df: pd.DataFrame, include_distance: bool) -> pd.DataFrame:
     list_df = pd.DataFrame(
         {
-            "Schule": df.apply(school_homepage_display_link, axis=1),
+            "Schule": df.apply(school_detail_link, axis=1),
             "Schulform": df["schulform"],
             "Sozialindex": df["sozialindexstufe"],
             "Schüler": df["anzahl_schueler"],
@@ -299,15 +435,48 @@ db_mtime = DB_PATH.stat().st_mtime if DB_PATH.exists() else 0
 filter_options = load_filter_options(db_mtime)
 imported_at = load_imported_at(db_mtime)
 
-st.title("Sozialindex Schulen NRW")
-st.caption("Schuljahr 2025/2026")
-
 if not DB_PATH.exists():
+    st.title("Sozialindex Schulen NRW")
+    st.caption("Schuljahr 2025/2026")
     st.warning(
         "Noch keine Datenbank gefunden. Führe zuerst "
         "`uv run python scripts/import_socialindex_csv.py` aus."
     )
     st.stop()
+
+school_query_param = st.query_params.get("schule")
+if school_query_param:
+    try:
+        detail_school_number = int(school_query_param)
+    except ValueError:
+        detail_school_number = None
+
+    if detail_school_number is None:
+        st.error("Die angegebene Schulnummer ist ungültig.")
+        st.link_button("Zur Übersicht", "./", icon=":material/arrow_back:")
+        st.stop()
+
+    active_latitude = st.session_state.get("latitude")
+    active_longitude = st.session_state.get("longitude")
+    origin_latitude = float(active_latitude) if has_value(active_latitude) else None
+    origin_longitude = float(active_longitude) if has_value(active_longitude) else None
+
+    detail_row = load_school_detail(
+        db_mtime,
+        detail_school_number,
+        origin_latitude,
+        origin_longitude,
+    )
+    if detail_row is None:
+        st.error(f"Keine Schule mit der Schulnummer {detail_school_number} gefunden.")
+        st.link_button("Zur Übersicht", "./", icon=":material/arrow_back:")
+        st.stop()
+
+    render_school_detail(detail_row)
+    st.stop()
+
+st.title("Sozialindex Schulen NRW")
+st.caption("Schuljahr 2025/2026")
 
 with st.sidebar:
     st.header("Umkreis")
